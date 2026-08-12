@@ -17,17 +17,27 @@ Tài liệu này chứa toàn bộ kiến trúc, nguyên lý hoạt động, c�
 
 ```
 c:\Users\Admin\Desktop\Water Mark\
-├── index.html              # Giao diện chính: Khung Canvas xem trước, thanh tỷ lệ (4:3, 3:4...), danh sách 10+ mẫu, biểu mẫu nhập text toàn diện, camera modal
+├── index.html                  # Giao diện chính: Canvas xem trước, thanh tỷ lệ (4:3, 3:4...), 12 mẫu, khung Tìm GPS theo địa chỉ, thanh danh sách ảnh loạt, camera modal
 ├── css/
-│   └── style.css           # Toàn bộ giao diện Dark Glassmorphism, CSS Tokens, Custom Sliders, Color Pickers, Template Previews
+│   └── style.css               # Toàn bộ giao diện Dark Glassmorphism, CSS Tokens, accordion, nav chip, batch strip, responsive
 ├── js/
-│   ├── exif-parser.js      # Bộ phân tích nhị phân JPEG EXIF (đọc ngày chụp DateTimeOriginal, toạ độ GPS Lat/Lon từ cảm biến ảnh gốc)
-│   ├── geocoding.js        # Dịch vụ định vị Browser Geolocation API, Tra cứu ngược địa chỉ Việt Nam (Nominatim), Sinh mã bảo mật 14 ký tự
-│   ├── watermark-engine.js # Lõi vẽ Canvas 2D độ nét cao, thuật toán co giãn tỷ lệ ảnh động, 10+ hàm vẽ mẫu, bóng đổ chữ chống chìm, logo, mã xoay -90°
-│   ├── camera.js           # Bộ điều khiển Camera trực tiếp (MediaDevices), lật camera trước/sau, live watermark overlay loop, chụp ảnh snapshot
-│   └── app.js              # State Controller trung tâm, đồng bộ dữ liệu 2 chiều (Two-way binding), bộ chuyển tỷ lệ (4:3, 3:4...), tạo nền đen mẫu, tải ZIP
-└── AGENTS.md               # Tài liệu này (Dành cho các AI Agents đọc và cập nhật)
+│   ├── exif-parser.js          # Bộ phân tích nhị phân JPEG EXIF (ngày chụp DateTimeOriginal, toạ độ GPS Lat/Lon), có validate chống ngày rác
+│   ├── geocoding.js            # Geolocation API, tra địa chỉ NGƯỢC + XUÔI (Nominatim), sinh mã xác thực, addMinutesToTime
+│   ├── watermark-engine.js     # Lõi vẽ Canvas 2D, co giãn tỷ lệ động, 12 hàm vẽ mẫu, preloadFonts, anchorBlock 4 góc, logo 2 tông màu, mã xoay -90°
+│   ├── camera.js               # Camera trực tiếp (MediaDevices), lật camera, live overlay loop, chống race bằng token thế hệ
+│   └── app.js                  # State Controller, two-way binding, biến thể per-image cho loạt ảnh, tải ZIP, tìm GPS
+├── tests/                      # Bộ test Playwright (package.json RIÊNG — app chính vẫn Zero-Dependency)
+│   ├── ui-test.js              # 55 kiểm thử: reachability đa viewport, 12 mẫu × 4 vị trí, accordion, geocode (mock), camera giả lập
+│   ├── batch-test.js           # 11 kiểm thử: mỗi ảnh mã duy nhất + giờ cộng dồn 0–2 phút
+│   └── vert-code-test.js       #  8 kiểm thử: định dạng mã xác thực trên 20.000 mẫu sinh ra
+├── assets/                     # Ảnh chụp màn hình dùng trong README
+├── .github/workflows/
+│   └── deploy-pages.yml        # Tự động deploy GitHub Pages mỗi lần push lên main
+├── README.md                   # Tài liệu cho người dùng cuối (tính năng, cách dùng, kiểm thử)
+└── AGENTS.md                   # Tài liệu này (Dành cho các AI Agents đọc và cập nhật)
 ```
+
+**Liên kết ngoài:** Repo https://github.com/phongvan0926/watermark · Trang dùng trực tiếp https://phongvan0926.github.io/watermark/
 
 ---
 
@@ -112,10 +122,18 @@ Từ v1.4.0, mẫu `timemark-standard` dùng **hệ đơn vị scale thống nh�
    - Luôn kiểm tra `if (element) { ... }` hoặc dùng `if (boxElement) boxElement.classList.toggle(...)` để tránh lỗi `TypeError: Cannot read properties of null` làm ngắt tiến trình `DOMContentLoaded`.
 3. **Gọi icon an toàn:**
    - Dùng `if (window.lucide && window.lucide.createIcons) window.lucide.createIcons();` thay vì gọi trần `lucide.createIcons()`.
-4. **Kiểm tra cú pháp sau khi sửa:**
-   - Chạy lệnh `node -c js/app.js js/watermark-engine.js js/geocoding.js js/exif-parser.js js/camera.js` để đảm bảo 0 lỗi cú pháp trước khi bàn giao.
-5. **Cập nhật AGENTS.md:**
-   - Mỗi khi bổ sung tính năng, mẫu mới hoặc sửa logic quan trọng, AI phải thêm mục vào phần **Nhật Ký Thay Đổi (Changelog)** ở cuối file này.
+4. **Kiểm tra cú pháp & chạy test sau khi sửa:**
+   - Chạy `node --check` cho từng file trong `js/` để đảm bảo 0 lỗi cú pháp.
+   - Chạy bộ test Playwright trước khi bàn giao (từ thư mục gốc):
+     ```bash
+     node tests/ui-test.js && node tests/batch-test.js && node tests/vert-code-test.js
+     ```
+     Hiện trạng chuẩn: **74/74 PASS** (55 + 11 + 8). Nếu thêm tính năng, phải bổ sung test tương ứng.
+5. **QUY TRÌNH BẮT BUỘC SAU MỖI LẦN HOÀN THÀNH CÔNG VIỆC** (yêu cầu trực tiếp của chủ dự án):
+   - **a. Cập nhật tài liệu:** thêm mô tả tính năng vào `README.md` (góc nhìn người dùng cuối) và thêm mục vào **Nhật Ký Thay Đổi (Changelog)** cuối file `AGENTS.md` (góc nhìn kỹ thuật) — kèm cập nhật các mục 2/3/4 nếu cấu trúc, công thức hay danh sách mẫu thay đổi.
+   - **b. Commit** với message tiếng Việt mô tả rõ thay đổi.
+   - **c. Push** lên `origin main` để local và GitHub luôn đồng bộ; GitHub Pages sẽ tự deploy sau ~1 phút.
+   - Không chờ người dùng nhắc — đây là bước kết thúc mặc định của mọi tác vụ có thay đổi mã nguồn.
 
 ---
 
@@ -165,3 +183,8 @@ Từ v1.4.0, mẫu `timemark-standard` dùng **hệ đơn vị scale thống nh�
   - **Preview & tải đều dùng biến thể:** `renderStateFor(item)` tạo state biến thể (ghi đè `vertCode` + `time` = base + offset) cho cả xem trước từng ảnh lẫn khi xuất ZIP; **mọi trường khác giữ nguyên** từ state gốc — đúng yêu cầu "chỉ đổi mã & giờ". Tên file ZIP gắn số thứ tự + mã để truy vết (`03_anh_XXXX_timemark.jpg`).
   - **UI batch nâng cấp:** thanh danh sách ảnh có toggle "🎲 Mỗi ảnh mã riêng + giờ +0–2′" (mặc định bật), nút "Tạo lại" reroll toàn bộ, dòng chú thích realtime "Ảnh #i/n · mã … · giờ … (+k′)", thumbnail đánh số thứ tự. Ô nhập mã tự đồng bộ theo ảnh đang xem; khi bật biến thể, sửa mã/đổi mã tác động lên riêng ảnh đó.
   - **Test `tests/batch-test.js`** (11/11 PASS): upload 6 ảnh → 6 mã duy nhất đúng định dạng, offset không giảm & bước 0–2, giờ = base+offset, tắt toggle ẩn biến thể, nút Tạo lại đổi bộ mã; `addMinutesToTime` 8/8 ca (kể cả cuộn qua nửa đêm). UI suite vẫn 55/55.
+- **v1.6.1 (Chuẩn Hoá Tài Liệu & Quy Trình Bàn Giao):**
+  - **Ghi thành quy tắc bắt buộc** (mục 5): sau MỖI lần hoàn thành công việc phải tự động cập nhật `README.md` + changelog `AGENTS.md`, rồi `git commit` và `git push` lên `origin main` — không chờ nhắc.
+  - **Cập nhật Codebase Manifest (mục 2)** cho khớp thực tế: bổ sung `tests/` (3 bộ test), `assets/`, `.github/workflows/deploy-pages.yml`, `README.md`; mô tả lại vai trò từng file JS theo đúng chức năng hiện tại (forwardGeocode, preloadFonts, anchorBlock, biến thể per-image, chống race camera).
+  - **Bổ sung quy tắc chạy test trước khi bàn giao** (mục 4): `node --check` cho từng file + chạy đủ 3 bộ test, mốc chuẩn **74/74 PASS**.
+  - **README.md hoàn thiện:** badge phiên bản + tổng số test đúng thực tế (74/74), ảnh minh hoạ tính năng tải hàng loạt, cây thư mục đầy đủ, mục giải thích minh bạch bản chất mã xác thực dọc (tem trang trí, không phải token tra cứu được), ghi chú UI gọn gàng.
