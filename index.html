@@ -105,13 +105,41 @@
       </section>
 
       <!-- Right: Sidebar Editor with Full Text Controls -->
-      <aside class="editor-sidebar">
-        
+      <aside class="editor-sidebar" id="editor-sidebar">
+
+        <!-- Thanh điều hướng nhanh (dính trên đầu, nhảy tới từng khối) -->
+        <nav class="sidebar-nav" id="sidebar-nav">
+          <button type="button" class="nav-chip" data-target="sec-geosearch">📍 Tìm GPS</button>
+          <button type="button" class="nav-chip" data-target="sec-templates">🖼 Mẫu</button>
+          <button type="button" class="nav-chip" data-target="sec-content">✏️ Nội dung</button>
+          <button type="button" class="nav-chip" data-target="sec-style">🎨 Kiểu dáng</button>
+        </nav>
+
+        <!-- Section 0: Tìm GPS theo địa chỉ (gõ địa chỉ -> tự tra toạ độ -> điền vào ảnh) -->
+        <div class="sidebar-card" id="sec-geosearch">
+          <div class="card-header collapsible-header">
+            <h3><i data-lucide="map-pin"></i> Tìm GPS Theo Địa Chỉ</h3>
+            <i data-lucide="chevron-down" class="collapse-icon"></i>
+          </div>
+          <div class="card-body">
+            <div class="geo-search-row">
+              <input type="text" id="input-geo-search" placeholder="VD: 167 Nguyễn Ngọc Vũ, Cầu Giấy, Hà Nội" autocomplete="off">
+              <button type="button" id="btn-geo-search" class="btn btn-primary btn-sm">
+                <i data-lucide="search"></i> Tìm
+              </button>
+            </div>
+            <div id="geo-search-status" class="geo-status hidden"></div>
+            <div id="geo-search-results" class="geo-results hidden"></div>
+            <span class="input-hint">Gõ địa chỉ rồi bấm Tìm (hoặc Enter) — chọn kết quả để tự điền địa chỉ + toạ độ GPS vào ảnh.</span>
+          </div>
+        </div>
+
         <!-- Section 1: Chọn Mẫu Watermark (Bộ sưu tập Timemark 100% Chuẩn) -->
-        <div class="sidebar-card">
-          <div class="card-header">
+        <div class="sidebar-card" id="sec-templates">
+          <div class="card-header collapsible-header">
             <h3><i data-lucide="layout-template"></i> Mẫu Watermark Timemark</h3>
             <span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; font-size: 0.68rem;">100% Chuẩn App</span>
+            <i data-lucide="chevron-down" class="collapse-icon"></i>
           </div>
           <div class="card-body">
             
@@ -293,12 +321,13 @@
         </div>
 
         <!-- Section 2: Chỉnh Sửa Toàn Bộ Text (All Editable Fields) -->
-        <div class="sidebar-card">
-          <div class="card-header">
+        <div class="sidebar-card" id="sec-content">
+          <div class="card-header collapsible-header">
             <h3><i data-lucide="edit-3"></i> Chỉnh Sửa Tất Cả Nội Dung Text</h3>
             <button id="btn-fetch-location" class="btn btn-outline-primary btn-xs" title="Tự động lấy GPS & Địa chỉ hiện tại">
               <i data-lucide="map-pin"></i> GPS Tự Động
             </button>
+            <i data-lucide="chevron-down" class="collapse-icon"></i>
           </div>
           
           <div class="card-body">
@@ -596,9 +625,10 @@
         </div>
 
         <!-- Section 3: Tinh Chỉnh Kiểu Dáng, Vị Trí, Màu Sắc & Bóng Đổ -->
-        <div class="sidebar-card">
-          <div class="card-header">
+        <div class="sidebar-card" id="sec-style">
+          <div class="card-header collapsible-header">
             <h3><i data-lucide="sliders"></i> Tinh Chỉnh Kiểu Dáng & Vị Trí</h3>
+            <i data-lucide="chevron-down" class="collapse-icon"></i>
           </div>
           <div class="card-body">
             

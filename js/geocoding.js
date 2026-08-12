@@ -152,6 +152,64 @@ const GeoService = {
   },
 
   /**
+   * Forward geocode: gõ địa chỉ -> tra toạ độ GPS + địa chỉ chuẩn hoá (Nominatim /search)
+   * @param {string} query - địa chỉ tự do, ví dụ "167 Nguyễn Ngọc Vũ, Cầu Giấy, Hà Nội"
+   * @returns {Promise<Array<{latitude, longitude, displayName, line1, street, ward, district, city, country}>>}
+   */
+  async forwardGeocode(query) {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&addressdetails=1&limit=5&accept-language=vi`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    let response;
+    try {
+      response = await fetch(url, {
+        headers: { 'Accept': 'application/json' },
+        signal: controller.signal
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
+
+    if (!response.ok) {
+      throw new Error('Máy chủ tra cứu địa chỉ trả lỗi ' + response.status);
+    }
+
+    const data = await response.json();
+    if (!Array.isArray(data)) return [];
+
+    return data.map((item) => {
+      const addr = item.address || {};
+      const houseNumber = addr.house_number || '';
+      const road = addr.road || addr.street || '';
+      const ward = addr.suburb || addr.quarter || addr.neighbourhood || addr.village || '';
+      const district = addr.city_district || addr.district || addr.county || '';
+      const city = addr.city || addr.state || addr.province || '';
+      const country = addr.country || 'Việt Nam';
+
+      let streetPart = [houseNumber, road].filter(Boolean).join(' ');
+      if (!streetPart) streetPart = item.name || ward || district || city;
+
+      const wardLower = (ward || '').toLowerCase();
+      const wardPart = ward ? (wardLower.startsWith('phường') || wardLower.startsWith('p.') ? ward : `P. ${ward}`) : '';
+      const cityLower = (city || '').toLowerCase();
+      const cityPart = city ? (cityLower.includes('thành phố') || cityLower.includes('tỉnh') ? city : `Thành Phố ${city}`) : '';
+
+      return {
+        latitude: parseFloat(item.lat),
+        longitude: parseFloat(item.lon),
+        displayName: item.display_name || '',
+        line1: [streetPart, wardPart].filter(Boolean).join(', '),
+        street: streetPart,
+        ward: wardPart,
+        district: district,
+        city: cityPart,
+        country: country
+      };
+    }).filter(r => Number.isFinite(r.latitude) && Number.isFinite(r.longitude));
+  },
+
+  /**
    * Format time into HH:mm or HH:mm:ss
    */
   formatTime(date, includeSeconds = false) {

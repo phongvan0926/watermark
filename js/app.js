@@ -1213,6 +1213,104 @@ document.addEventListener('DOMContentLoaded', () => {
     mainCanvas.scrollIntoView({ behavior: 'smooth', block: 'center' });
   });
 
+  // --- 12. Accordion: bấm header để thu gọn/mở rộng từng khối sidebar ---
+  document.querySelectorAll('.sidebar-card .collapsible-header').forEach(header => {
+    header.addEventListener('click', (e) => {
+      // Không thu gọn khi bấm vào nút chức năng nằm trong header (VD: GPS Tự Động)
+      if (e.target.closest('button, input, select, a')) return;
+      const card = header.closest('.sidebar-card');
+      if (card) card.classList.toggle('collapsed');
+    });
+  });
+
+  // Thanh điều hướng nhanh: nhảy tới khối tương ứng (tự mở nếu đang thu gọn)
+  document.querySelectorAll('.nav-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      const target = document.getElementById(chip.dataset.target);
+      if (!target) return;
+      target.classList.remove('collapsed');
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+
+  // --- 13. Tìm GPS theo địa chỉ (forward geocoding) ---
+  const inputGeoSearch = document.getElementById('input-geo-search');
+  const btnGeoSearch = document.getElementById('btn-geo-search');
+  const geoStatus = document.getElementById('geo-search-status');
+  const geoResults = document.getElementById('geo-search-results');
+
+  function setGeoStatus(msg, isError) {
+    if (!geoStatus) return;
+    geoStatus.textContent = msg || '';
+    geoStatus.classList.toggle('hidden', !msg);
+    geoStatus.classList.toggle('error', !!isError);
+  }
+
+  function formatSignedCoords(lat, lon) {
+    return `${Math.abs(lat).toFixed(6)}°${lat >= 0 ? 'N' : 'S'}, ${Math.abs(lon).toFixed(6)}°${lon >= 0 ? 'E' : 'W'}`;
+  }
+
+  function applyGeoResult(r) {
+    // Điền địa chỉ + toạ độ GPS vào mọi trường liên quan của watermark
+    state.address1 = r.line1 || r.displayName;
+    state.address2 = state.template === 'timemark-gps'
+      ? GeoService.formatCoordsString(r.latitude, r.longitude)
+      : (r.city || r.district || '');
+    state.gpsLine3 = r.city || '';
+    state.gpsLine4 = r.ward || '';
+    state.gpsLine5 = r.country || 'Việt Nam';
+    state.customLocation = r.line1 || r.displayName;
+    state.customGps = formatSignedCoords(r.latitude, r.longitude);
+    state.secAddr = r.line1 || r.displayName;
+    syncInputsFromState();
+    updateCanvas();
+    if (geoResults) geoResults.classList.add('hidden');
+    setGeoStatus(`✅ Đã điền địa chỉ & toạ độ GPS (${formatSignedCoords(r.latitude, r.longitude)}) vào ảnh.`);
+  }
+
+  async function runGeoSearch() {
+    const q = (inputGeoSearch && inputGeoSearch.value || '').trim();
+    if (!q) { setGeoStatus('Hãy nhập địa chỉ cần tìm.', true); return; }
+    if (btnGeoSearch) btnGeoSearch.disabled = true;
+    setGeoStatus('Đang tìm toạ độ GPS…');
+    if (geoResults) { geoResults.innerHTML = ''; geoResults.classList.add('hidden'); }
+    try {
+      const results = await GeoService.forwardGeocode(q);
+      if (!results.length) {
+        setGeoStatus('Không tìm thấy địa chỉ này. Thử thêm quận/huyện hoặc thành phố.', true);
+        return;
+      }
+      setGeoStatus(`Tìm thấy ${results.length} kết quả — bấm chọn để điền vào ảnh:`);
+      if (geoResults) {
+        geoResults.classList.remove('hidden');
+        results.forEach(r => {
+          const item = document.createElement('button');
+          item.type = 'button';
+          item.className = 'geo-result-item';
+          const name = document.createElement('span');
+          name.className = 'geo-result-name';
+          name.textContent = r.displayName;
+          const coords = document.createElement('span');
+          coords.className = 'geo-result-coords';
+          coords.textContent = formatSignedCoords(r.latitude, r.longitude);
+          item.appendChild(name);
+          item.appendChild(coords);
+          item.addEventListener('click', () => applyGeoResult(r));
+          geoResults.appendChild(item);
+        });
+      }
+    } catch (err) {
+      setGeoStatus('Lỗi khi tra cứu: ' + (err && err.message || err), true);
+    } finally {
+      if (btnGeoSearch) btnGeoSearch.disabled = false;
+    }
+  }
+
+  if (btnGeoSearch) btnGeoSearch.addEventListener('click', runGeoSearch);
+  if (inputGeoSearch) inputGeoSearch.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); runGeoSearch(); }
+  });
+
   // Initial setup: Load sample image, sync state, and re-render when fonts are loaded
   syncInputsFromState();
   loadSampleImage();

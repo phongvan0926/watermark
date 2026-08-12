@@ -225,7 +225,7 @@ body {
 .app-main {
   display: flex;
   flex: 1;
-  height: calc(100vh - 64px);
+  min-height: 0; /* BẮT BUỘC: cho phép con flex co lại để overflow-y của sidebar hoạt động */
   overflow: hidden;
 }
 
@@ -481,20 +481,55 @@ body {
   width: 440px;
   min-width: 440px;
   max-width: 440px;
+  min-height: 0; /* cho phép co trong flex row để cuộn được */
   background: var(--bg-secondary);
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 16px;
+  overscroll-behavior: contain;
+  padding: 12px 14px 72px; /* chừa đáy rộng để nút cuối luôn kéo tới được */
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
 }
 
-/* Custom Scrollbar */
+/* Thanh điều hướng nhanh dính trên đầu sidebar */
+.sidebar-nav {
+  position: sticky;
+  top: -12px;
+  z-index: 20;
+  display: flex;
+  gap: 6px;
+  padding: 10px 2px 8px;
+  margin: -4px 0 0;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  flex-wrap: wrap;
+}
+
+.nav-chip {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.nav-chip:hover {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: var(--accent-gold);
+  color: var(--accent-gold-light);
+}
+
+/* Custom Scrollbar (đủ dày để nhận ra là cuộn được) */
 .editor-sidebar::-webkit-scrollbar,
 .canvas-viewport::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 10px;
+  height: 10px;
 }
 
 .editor-sidebar::-webkit-scrollbar-thumb,
@@ -514,6 +549,8 @@ body {
   border-radius: var(--radius-lg);
   overflow: hidden;
   box-shadow: var(--shadow-sm);
+  flex-shrink: 0; /* không bị nén trong cột flex — giữ đúng chiều cao nội dung */
+  scroll-margin-top: 56px; /* khi nhảy tới bằng nav chip không bị thanh sticky che */
 }
 
 .card-header {
@@ -547,6 +584,94 @@ body {
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+/* Accordion: bấm header để thu gọn/mở rộng từng khối */
+.collapsible-header {
+  cursor: pointer;
+  user-select: none;
+}
+
+.collapsible-header:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.collapse-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  margin-left: 8px;
+  transition: transform 0.2s ease;
+}
+
+.sidebar-card.collapsed .collapse-icon {
+  transform: rotate(-90deg);
+}
+
+.sidebar-card.collapsed .card-body {
+  display: none;
+}
+
+/* Khung tìm GPS theo địa chỉ */
+.geo-search-row {
+  display: flex;
+  gap: 8px;
+}
+
+.geo-search-row input {
+  flex: 1;
+}
+
+.geo-search-row .btn {
+  flex-shrink: 0;
+}
+
+.geo-status {
+  font-size: 0.75rem;
+  color: var(--accent-gold-light);
+  padding: 4px 2px;
+}
+
+.geo-status.error {
+  color: var(--danger-red);
+}
+
+.geo-results {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.geo-result-item {
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+}
+
+.geo-result-item:hover {
+  border-color: var(--accent-gold);
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.geo-result-name {
+  font-size: 0.78rem;
+  color: var(--text-primary);
+  font-weight: 600;
+  display: block;
+  margin-bottom: 2px;
+}
+
+.geo-result-coords {
+  font-size: 0.7rem;
+  color: var(--accent-gold-light);
+  font-family: monospace;
 }
 
 /* Template Grid */
@@ -1256,6 +1381,7 @@ textarea {
   align-items: center;
   justify-content: center;
   padding: 20px;
+  overflow-y: auto; /* màn hình thấp: cho phép cuộn để không mất nút chụp */
 }
 
 .camera-dialog {
@@ -1264,6 +1390,7 @@ textarea {
   border-radius: var(--radius-lg);
   width: 100%;
   max-width: 680px;
+  max-height: 94vh; /* không vượt màn hình — nút chụp luôn nhìn thấy */
   overflow: hidden;
   box-shadow: var(--shadow-lg);
   display: flex;
@@ -1293,6 +1420,8 @@ textarea {
   background: #000;
   aspect-ratio: 4/3;
   overflow: hidden;
+  flex: 1;
+  min-height: 0; /* co lại khi modal chạm max-height, nhường chỗ cho hàng nút */
 }
 
 #camera-video {
