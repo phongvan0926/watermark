@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Timemark & GPS Watermark Pro - Đóng Dấu Toạ Độ & Thời Gian</title>
+  <!-- Google Fonts (bộ font chuẩn Timemark đã kiểm chứng bằng đo pixel trên ảnh mẫu):
+       Big Shoulders Display 700 = số đồng hồ | Roboto Condensed = ngày/thứ/địa chỉ
+       Roboto = logo "Photo by Timemark" | PT Mono = mã xác thực dọc | Inter = giao diện UI -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800&family=Anton&family=Roboto+Condensed:wght@400;500;700&family=Roboto:wght@400;500;700&family=PT+Mono&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- JSZip for batch export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="dark-theme">
+  <div class="app-container">
+    <!-- Top Header -->
+    <header class="app-header">
+      <div class="brand">
+        <div class="brand-icon">
+          <i data-lucide="camera"></i>
+        </div>
+        <div class="brand-text">
+          <h1>Timemark GPS Pro</h1>
+          <span class="badge">100% Chân thực & Tuỳ biến Toàn bộ Text</span>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button id="btn-sample-img" class="btn btn-secondary btn-sm" title="Đổi ảnh mẫu thử nghiệm">
+          <i data-lucide="image"></i> Đổi Ảnh Mẫu
+        </button>
+        <button id="btn-open-camera" class="btn btn-secondary btn-sm" title="Mở Camera chụp trực tiếp">
+          <i data-lucide="video"></i> Camera
+        </button>
+        <label for="file-upload" class="btn btn-secondary btn-sm cursor-pointer" title="Tải ảnh từ máy tính hoặc điện thoại">
+          <i data-lucide="upload"></i> Tải Ảnh Lên
+          <input type="file" id="file-upload" accept="image/*" multiple style="display: none;">
+        </label>
+        <button id="btn-download" class="btn btn-primary btn-sm" title="Tải ảnh đã đóng dấu với độ phân giải gốc">
+          <i data-lucide="download"></i> Tải Ảnh Về
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="app-main">
+      <!-- Left / Center: Preview Workspace -->
+      <section class="preview-workspace">
+        <div class="preview-toolbar">
+          <div class="toolbar-left">
+            <span class="preview-label"><i data-lucide="eye"></i> Xem trước</span>
+            <span id="img-resolution-badge" class="badge badge-info">1920 x 1440 px (4:3)</span>
+            
+            <!-- Aspect Ratio Switcher -->
+            <div class="ratio-switchers">
+              <button type="button" class="ratio-btn active" data-ratio="4:3" title="Tỷ lệ chuẩn ảnh chụp ngang 4:3 (1920x1440)">4:3 Ngang</button>
+              <button type="button" class="ratio-btn" data-ratio="3:4" title="Tỷ lệ chuẩn ảnh chụp dọc 3:4 (1440x1920)">3:4 Dọc</button>
+              <button type="button" class="ratio-btn" data-ratio="16:9" title="Tỷ lệ màn hình rộng 16:9">16:9</button>
+              <button type="button" class="ratio-btn" data-ratio="9:16" title="Tỷ lệ dọc toàn màn hình 9:16">9:16</button>
+            </div>
+          </div>
+          <div class="toolbar-right">
+            <!-- Sample exact photo presets -->
+            <button id="btn-sample-43" class="btn-sample-preset" title="Nạp đúng 100% mẫu ảnh chụp ngang 4:3 (Ảnh 1)"><i data-lucide="image"></i> Mẫu 4:3 Ngang</button>
+            <button id="btn-sample-34" class="btn-sample-preset" title="Nạp đúng 100% mẫu ảnh chụp dọc 3:4 (Ảnh 2)"><i data-lucide="smartphone"></i> Mẫu 3:4 Dọc</button>
+            <button id="btn-zoom-fit" class="btn-icon" title="Căn vừa khung hình"><i data-lucide="maximize-2"></i></button>
+            <button id="btn-copy-clipboard" class="btn-icon" title="Sao chép ảnh vào Clipboard"><i data-lucide="clipboard-copy"></i></button>
+            <button id="btn-reset-text" class="btn-icon" title="Khôi phục mẫu ban đầu"><i data-lucide="rotate-ccw"></i></button>
+          </div>
+        </div>
+
+        <!-- Canvas Container -->
+        <div class="canvas-viewport" id="canvas-viewport">
+          <div class="canvas-wrapper" id="canvas-wrapper">
+            <canvas id="main-canvas"></canvas>
+            <div id="loading-overlay" class="loading-overlay hidden">
+              <div class="spinner"></div>
+              <span>Đang xử lý ảnh...</span>
+            </div>
+          </div>
+          
+          <!-- Drop Zone Overlay -->
+          <div id="drop-zone" class="drop-zone-overlay hidden">
+            <div class="drop-zone-content">
+              <i data-lucide="upload-cloud" class="drop-icon"></i>
+              <p>Thả ảnh vào đây để mở và đóng dấu tức thì</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Batch Thumbnails Strip (khi tải nhiều ảnh cùng lúc) -->
+        <div id="batch-strip" class="batch-strip hidden">
+          <div class="batch-header">
+            <span><i data-lucide="layers"></i> Danh sách ảnh (<span id="batch-count">0</span> ảnh):</span>
+            <button id="btn-download-zip" class="btn btn-success btn-xs">
+              <i data-lucide="archive"></i> Tải Tất Cả (ZIP)
+            </button>
+          </div>
+          <div class="batch-thumbnails" id="batch-thumbnails"></div>
+        </div>
+      </section>
+
+      <!-- Right: Sidebar Editor with Full Text Controls -->
+      <aside class="editor-sidebar">
+        
+        <!-- Section 1: Chọn Mẫu Watermark (Bộ sưu tập Timemark 100% Chuẩn) -->
+        <div class="sidebar-card">
+          <div class="card-header">
+            <h3><i data-lucide="layout-template"></i> Mẫu Watermark Timemark</h3>
+            <span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; font-size: 0.68rem;">100% Chuẩn App</span>
+          </div>
+          <div class="card-body">
+            
+            <!-- Category Tabs -->
+            <div class="template-tabs">
+              <button type="button" class="tab-btn active" data-tab="tab-all">Tất cả mẫu</button>
+              <button type="button" class="tab-btn" data-tab="tab-popular">Phổ biến</button>
+              <button type="button" class="tab-btn" data-tab="tab-work">Công việc & Báo cáo</button>
+            </div>
+
+            <div class="template-grid" id="template-container">
+              
+              <!-- 1. Thời gian & Vị trí (Chuẩn Timemark - Ảnh 1 & 4) -->
+              <button class="template-card active" data-template="timemark-standard" data-category="popular">
+                <div class="template-badge">Thời gian & Vị trí</div>
+                <div class="template-preview tm-std">
+                  <div class="tm-time">09:30</div>
+                  <div class="tm-date">30 Thg 1 2023</div>
+                  <div class="tm-addr">Tao Dan Park, Hồ Chí Minh</div>
+                  <div class="tm-brand">Timemark</div>
+                </div>
+                <span class="template-name">1. Thời gian & Vị trí</span>
+              </button>
+
+              <!-- 2. Mẫu 3: Tùy Chỉnh (Tiêu đề của bạn + Vạch vàng + 3 dòng) -->
+              <button class="template-card" data-template="timemark-custom" data-category="popular">
+                <div class="template-badge" style="background: rgba(245, 158, 11, 0.35); color: #fff;">Mẫu 3: Tùy chỉnh</div>
+                <div class="template-preview tm-custom-card">
+                  <div class="tm-cust-title">Tiêu đề của bạn</div>
+                  <div class="tm-cust-body">
+                    <div class="tm-cust-bar"></div>
+                    <div class="tm-cust-lines">
+                      <div class="tm-cust-line">30/01/2023 09:30</div>
+                      <div class="tm-cust-line">Tao Dan Park, Hồ Chí Minh</div>
+                      <div class="tm-cust-line">10.774917°N, 106.692420°E</div>
+                    </div>
+                  </div>
+                </div>
+                <span class="template-name">2. Tùy Chỉnh (Mẫu 3)</span>
+              </button>
+
+              <!-- 3. Điểm danh (Mẫu 2 trong Catalog) -->
+              <button class="template-card" data-template="timemark-attendance" data-category="work">
+                <div class="template-badge">Điểm danh</div>
+                <div class="template-preview tm-attend-card">
+                  <div class="tm-attend-header">
+                    <span class="attend-badge">Điểm danh</span>
+                    <span class="attend-time">23:40</span>
+                  </div>
+                  <div class="tm-attend-body">
+                    <div class="tm-cust-bar"></div>
+                    <div class="tm-cust-lines">
+                      <div class="tm-cust-line">30/01/2022</div>
+                      <div class="tm-cust-line">Tao Dan Park, Hồ Chí Minh</div>
+                    </div>
+                  </div>
+                </div>
+                <span class="template-name">3. Điểm Danh</span>
+              </button>
+
+              <!-- 4. Dịch vụ (Mẫu 4 trong Catalog) -->
+              <button class="template-card" data-template="timemark-service" data-category="work">
+                <div class="template-badge">Dịch vụ</div>
+                <div class="template-preview tm-service-card">
+                  <div class="tm-serv-title">Tên dịch vụ</div>
+                  <div class="tm-serv-time">30/01/2023 09:30</div>
+                  <div class="tm-serv-item">👉: Chi tiết dịch vụ</div>
+                  <div class="tm-serv-item" style="color:#60a5fa">☎: 0123456666</div>
+                </div>
+                <span class="template-name">4. Dịch Vụ</span>
+              </button>
+
+              <!-- 5. Bảo vệ / Tuần tra (Mẫu 5 trong Catalog) -->
+              <button class="template-card" data-template="timemark-security" data-category="work">
+                <div class="template-badge">Bảo vệ</div>
+                <div class="template-preview tm-sec-card">
+                  <div class="tm-sec-header">🛡️ BẢO VỆ</div>
+                  <div class="tm-sec-body">
+                    <span class="tm-sec-time">09:30</span>
+                    <span class="tm-sec-date">30/01/2023</span>
+                  </div>
+                  <div class="tm-sec-addr">Tao Dan Park, Hồ Chí Minh</div>
+                </div>
+                <span class="template-name">5. Bảo Vệ / Tuần Tra</span>
+              </button>
+
+              <!-- 6. Hồ Sơ Kỹ Thuật / Công Trình (Mẫu 6 trong Catalog) -->
+              <button class="template-card" data-template="timemark-technical" data-category="work">
+                <div class="template-badge">Công trình</div>
+                <div class="template-preview tm-tech-card">
+                  <div class="tm-tech-header">HỒ SƠ KỸ THUẬT</div>
+                  <div class="tm-tech-line">Nghiệm thu: Thử kín tầng 3</div>
+                  <div class="tm-tech-line">Thời gian: 30/01/2023 09:30</div>
+                </div>
+                <span class="template-name">6. Hồ Sơ Kỹ Thuật</span>
+              </button>
+
+              <!-- 7. Đã Hoàn Thành (Mẫu 7 trong Catalog) -->
+              <button class="template-card" data-template="timemark-completed" data-category="work">
+                <div class="template-badge">Đã hoàn thành</div>
+                <div class="template-preview tm-comp-card">
+                  <div class="tm-comp-head">
+                    <span class="tm-comp-time">09:30</span>
+                    <span class="tm-comp-badge">✅</span>
+                  </div>
+                  <div class="tm-comp-body">
+                    <div class="tm-cust-bar"></div>
+                    <div class="tm-cust-lines">
+                      <div class="tm-cust-line">30/01/2023</div>
+                      <div class="tm-cust-line">Tao Dan Park, District 1</div>
+                    </div>
+                  </div>
+                </div>
+                <span class="template-name">7. Đã Hoàn Thành</span>
+              </button>
+
+              <!-- 8. Nhật Ký Công Việc (Mẫu 8 trong Catalog) -->
+              <button class="template-card" data-template="timemark-worklog" data-category="work">
+                <div class="template-badge">Nhật ký</div>
+                <div class="template-preview tm-log-card">
+                  <div class="tm-log-header">Nhật ký công việc</div>
+                  <div class="tm-log-line">Nội dung: Thử kín nội bộ</div>
+                  <div class="tm-log-line">Địa điểm: Tầng 3 trục 1B</div>
+                  <div class="tm-log-line">Thời gian: 30/01/2022 16:35</div>
+                </div>
+                <span class="template-name">8. Nhật Ký Công Việc</span>
+              </button>
+
+              <!-- 9. Toạ Độ GPS & Thời Tiết (Mẫu 9 trong Catalog) -->
+              <button class="template-card" data-template="timemark-weather-gps" data-category="popular">
+                <div class="template-badge">Thời tiết & GPS</div>
+                <div class="template-preview tm-weather-card">
+                  <div class="tm-weath-loc">Tao Dan Park</div>
+                  <div class="tm-weath-coords">10.7749°N, 106.6924°E  🧭 SE 125°</div>
+                  <div class="tm-weath-sub">30/01/2023 09:30  ☀️ 28°C</div>
+                </div>
+                <span class="template-name">9. GPS & Thời Tiết</span>
+              </button>
+
+              <!-- 10. Timemark Toạ Độ GPS Chính Xác (Ảnh 3) -->
+              <button class="template-card" data-template="timemark-gps" data-category="popular">
+                <div class="template-badge">Ảnh 3</div>
+                <div class="template-preview tm-coords">
+                  <div class="tm-time">10:13</div>
+                  <div class="tm-date">08/07/2026 | Thứ Tư</div>
+                  <div class="tm-addr">Thành Phố Hà Nội, P. Hoàng Liệt</div>
+                  <div class="tm-sub">Tọa độ: 20.970515°N ±16ft</div>
+                  <div class="tm-brand">Máy ảnh</div>
+                </div>
+                <span class="template-name">10. Timemark + Toạ Độ ±ft</span>
+              </button>
+
+              <!-- 11. GPS Camera Đa Dòng (Ảnh 2) -->
+              <button class="template-card" data-template="gps-multiline" data-category="popular">
+                <div class="template-badge">Ảnh 2</div>
+                <div class="template-preview gps-multi">
+                  <div class="gps-line">2026年5月19日 10:44:40</div>
+                  <div class="gps-line">Ngõ 4 Phương Mai</div>
+                  <div class="gps-line">Thành Phố Hà Nội</div>
+                  <div class="gps-line">P. Kim Liên - Việt Nam</div>
+                </div>
+                <span class="template-name">11. GPS Camera Đa Dòng</span>
+              </button>
+
+              <!-- 12. Báo Cáo Hiện Trường / Giám Sát -->
+              <button class="template-card" data-template="work-report" data-category="work">
+                <div class="template-badge">Báo cáo</div>
+                <div class="template-preview tm-report-card">
+                  <div class="tm-report-title">DỰ ÁN: TÒA NHÀ VĂN PHÒNG</div>
+                  <div class="tm-report-line">Giám sát: Nguyễn Văn Hưng</div>
+                  <div class="tm-report-line">30/01/2023 09:30 (Thứ Hai)</div>
+                  <div class="tm-report-line">Ghi chú: Đã nghiệm thu hoàn tất</div>
+                </div>
+                <span class="template-name">12. Báo Cáo Hiện Trường</span>
+              </button>
+
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 2: Chỉnh Sửa Toàn Bộ Text (All Editable Fields) -->
+        <div class="sidebar-card">
+          <div class="card-header">
+            <h3><i data-lucide="edit-3"></i> Chỉnh Sửa Tất Cả Nội Dung Text</h3>
+            <button id="btn-fetch-location" class="btn btn-outline-primary btn-xs" title="Tự động lấy GPS & Địa chỉ hiện tại">
+              <i data-lucide="map-pin"></i> GPS Tự Động
+            </button>
+          </div>
+          
+          <div class="card-body">
+            
+            <!-- 1. Giờ & Phút (HH:mm) -->
+            <div class="form-group">
+              <div class="input-header">
+                <label for="input-time"><i data-lucide="clock"></i> Giờ : Phút</label>
+                <button type="button" id="btn-now-time" class="btn-text-action"><i data-lucide="timer"></i> Lấy Giờ Hiện Tại</button>
+              </div>
+              <div class="input-with-action">
+                <input type="text" id="input-time" value="16:15" placeholder="Ví dụ: 16:15 hoặc 10:13">
+                <input type="time" id="picker-time" class="time-picker-btn" title="Chọn giờ nhanh">
+              </div>
+            </div>
+
+            <!-- 2. Ngày Tháng & Định Dạng Nhanh -->
+            <div class="form-group">
+              <div class="input-header">
+                <label for="input-date"><i data-lucide="calendar"></i> Ngày Tháng</label>
+                <div class="format-chips">
+                  <button type="button" class="chip active" data-date-fmt="eng" title="Định dạng tiếng Anh: 11 Aug 2026 (Chuẩn 2 ảnh mới)">11 Aug 2026</button>
+                  <button type="button" class="chip" data-date-fmt="vietnamese" title="Định dạng tiếng Việt: 11 Tháng 8, 2026">Tháng Việt</button>
+                  <button type="button" class="chip" data-date-fmt="slash" title="Định dạng gạch chéo: DD/MM/YYYY">DD/MM/YYYY</button>
+                  <button type="button" class="chip" data-date-fmt="cjk" title="Định dạng năm tháng ngày">YYYY年M月D日</button>
+                  <button type="button" class="chip" data-date-fmt="iso" title="Định dạng chuẩn ISO: YYYY-MM-DD">YYYY-MM-DD</button>
+                </div>
+              </div>
+              <input type="text" id="input-date" value="07 Tháng 8, 2026" placeholder="Ví dụ: 07 Tháng 8, 2026 hoặc 08/07/2026">
+            </div>
+
+            <!-- 3. Thứ trong tuần -->
+            <div class="form-group" id="group-day-of-week">
+              <div class="input-header">
+                <label for="input-day"><i data-lucide="calendar-days"></i> Thứ Trong Tuần</label>
+              </div>
+              <div class="input-row">
+                <input type="text" id="input-day" value="Thứ Sáu" placeholder="Thứ Hai, Thứ Ba, Thứ Tư...">
+                <select id="select-day" class="form-select-sm">
+                  <option value="">Chọn nhanh</option>
+                  <option value="Thứ Hai">Thứ Hai</option>
+                  <option value="Thứ Ba">Thứ Ba</option>
+                  <option value="Thứ Tư">Thứ Tư</option>
+                  <option value="Thứ Năm">Thứ Năm</option>
+                  <option value="Thứ Sáu">Thứ Sáu</option>
+                  <option value="Thứ Bảy">Thứ Bảy</option>
+                  <option value="Chủ Nhật">Chủ Nhật</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- 4. Địa chỉ Dòng 1 (Số nhà / Tên đường / Dự án) -->
+            <div class="form-group">
+              <div class="input-header">
+                <label for="input-addr-1"><i data-lucide="map-pin"></i> Địa Chỉ - Dòng 1</label>
+                <span class="input-hint">Số nhà, ngõ/đường, dự án</span>
+              </div>
+              <textarea id="input-addr-1" rows="2" placeholder="Ví dụ: Sunrise B, KĐT The Manor Central Park,">Sunrise B, KĐT The Manor Central Park,</textarea>
+            </div>
+
+            <!-- 5. Địa chỉ Dòng 2 / Toạ độ GPS -->
+            <div class="form-group">
+              <div class="input-header">
+                <label for="input-addr-2"><i data-lucide="navigation"></i> Địa Chỉ - Dòng 2 / Toạ Độ GPS</label>
+                <div class="quick-preset-btns">
+                  <button type="button" class="btn-micro" id="btn-set-sample-coords" title="Điền toạ độ mẫu như Ảnh 3">Toạ độ mẫu</button>
+                </div>
+              </div>
+              <textarea id="input-addr-2" rows="2" placeholder="Ví dụ: Định Công, Hà Nội hoặc Tọa độ: 20.970515°N, 105.816296°E ±16ft">Định Công, Hà Nội</textarea>
+            </div>
+
+            <!-- 6. Dòng địa chỉ mở rộng (Mẫu GPS Camera Đa Dòng - Ảnh 2) -->
+            <div class="form-group-box hidden" id="box-gps-multi-lines">
+              <div class="box-header">
+                <span><i data-lucide="list"></i> Các Dòng Phân Cấp (Mẫu GPS Đa Dòng)</span>
+              </div>
+              <div class="box-body">
+                <div class="field-item">
+                  <span class="field-label">Dòng 3 (Tỉnh/Thành phố):</span>
+                  <input type="text" id="input-gps-line3" value="Thành Phố Hà Nội" placeholder="Thành Phố Hà Nội">
+                </div>
+                <div class="field-item">
+                  <span class="field-label">Dòng 4 (Phường/Xã/Quận):</span>
+                  <input type="text" id="input-gps-line4" value="P. Kim Liên" placeholder="P. Kim Liên">
+                </div>
+                <div class="field-item">
+                  <span class="field-label">Dòng 5 (Quốc gia):</span>
+                  <input type="text" id="input-gps-line5" value="Việt Nam" placeholder="Việt Nam">
+                </div>
+              </div>
+            </div>
+
+            <!-- Mẫu 3: Tuỳ Biến Riêng (Tiêu đề của bạn + Vạch vàng + 3 dòng) -->
+            <div class="form-group-box hidden" id="box-custom-controls">
+              <div class="box-header">
+                <span><i data-lucide="sparkles"></i> Thiết Lập Mẫu 3: Tùy Chỉnh</span>
+              </div>
+              <div class="box-body">
+                <div class="field-item">
+                  <span class="field-label">Tiêu đề lớn trên cùng (Đậm):</span>
+                  <input type="text" id="input-custom-title" value="Tiêu đề của bạn" placeholder="Ví dụ: Tiêu đề của bạn / Nghiệm thu / Khảo sát">
+                </div>
+                <div class="field-item">
+                  <span class="field-label">Dòng 1 (Ngày & Giờ):</span>
+                  <input type="text" id="input-custom-datetime" value="30/01/2023 09:30" placeholder="30/01/2023 09:30">
+                </div>
+                <div class="field-item">
+                  <span class="field-label">Dòng 2 (Địa điểm / Vị trí):</span>
+                  <input type="text" id="input-custom-location" value="Tao Dan Park, Hồ Chí Minh" placeholder="Tao Dan Park, Hồ Chí Minh">
+                </div>
+                <div class="field-item">
+                  <span class="field-label">Dòng 3 (Toạ độ GPS):</span>
+                  <input type="text" id="input-custom-gps" value="10.774917°N, 106.692420°E" placeholder="10.774917°N, 106.692420°E">
+                </div>
+              </div>
+            </div>
+
+            <!-- Mẫu: Điểm Danh -->
+            <div class="form-group-box hidden" id="box-attend-controls">
+              <div class="box-header">
+                <span><i data-lucide="user-check"></i> Thiết Lập Mẫu Điểm Danh</span>
+              </div>
+              <div class="box-body">
+                <div class="field-item">
+                  <span class="field-label">Nhãn huy hiệu (Badge):</span>
+                  <input type="text" id="input-attend-badge" value="Điểm danh" placeholder="Điểm danh / Check-in / Ca sáng">
+                </div>
+              </div>
+            </div>
+
+            <!-- Mẫu: Dịch Vụ -->
+            <div class="form-group-box hidden" id="box-service-controls">
+              <div class="box-header">
+                <span><i data-lucide="briefcase"></i> Thiết Lập Mẫu Dịch Vụ</span>
+              </div>
+              <div class="box-body">
+                <div class="field-item">
+                  <span class="field-label">Tên dịch vụ:</span>
+                  <input type="text" id="input-serv-title" value="Tên dịch vụ" placeholder="Tên dịch vụ / Vệ sinh công nghiệp / Sửa chữa">
+                </div>
+                <div class="field-item">
+                  <span class="field-label">Chi tiết dịch vụ (👉):</span>
+                  <input type="text" id="input-serv-detail" value="Chi tiết dịch vụ: Bảo dưỡng định kỳ" placeholder="Chi tiết dịch vụ">
+                </div>
+                <div class="field-item">
+                  <span class="field-label">Hotline liên hệ (☎):</span>
+                  <input type="text" id="input-serv-phone" value="0123456666" placeholder="Số điện thoại / Hotline">
+                </div>
+              </div>
+            </div>
+
+            <!-- Mẫu: Bảo Vệ / Tuần Tra -->
+            <div class="form-group-box hidden" id="box-security-controls">
+              <div class="box-header">
+                <span><i data-lucide="shield"></i> Thiết Lập Mẫu Bảo Vệ</span>
+              </div>
+              <div class="box-body">
+                <div class="field-item">
+                  <span class="field-label">Tiêu đề huy hiệu:</span>
+                  <input type="text" id="input-sec-title" value="🛡️ BẢO VỆ" placeholder="🛡️ BẢO VỆ / TUẦN TRA">
+                </div>
+                <div class="field-item">
+                  <span class="field-label">Vị trí chốt trực:</span>
+                  <input type="text" id="input-sec-addr" value="Chốt Cổng 1, Tao Dan Park, Hồ Chí Minh" placeholder="Vị trí chốt tuần tra">
+                </div>
+              </div>
+            </div>
+
+            <!-- Mẫu: Hồ Sơ Kỹ Thuật / Công Trình -->
+            <div class="form-group-box hidden" id="box-technical-controls">
+              <div class="box-header">
+                <span><i data-lucide="wrench"></i> Thiết Lập Hồ Sơ Kỹ Thuật</span>
+              </div>
+              <div class="box-body">
+                <div class="field-item">
+                  <span class="field-label">Tiêu đề:</span>
+                  <input type="text" id="input-tech-header" value="HỒ SƠ KỸ THUẬT" placeholder="HỒ SƠ KỸ THUẬT / BIÊN BẢN HIỆN TRƯỜNG">
+                </div>
+                <div class="field-item">
+                  <span class="field-label">Hạng mục nghiệm thu:</span>
+                  <input type="text" id="input-tech-line1" value="Nghiệm thu: Thử kín nội bộ tầng 3" placeholder="Nội dung hạng mục">
+                </div>
+              </div>
+            </div>
+
+            <!-- Mẫu: Nhật Ký Công Việc -->
+            <div class="form-group-box hidden" id="box-worklog-controls">
+              <div class="box-header">
+                <span><i data-lucide="book-open"></i> Thiết Lập Nhật Ký Công Việc</span>
+              </div>
+              <div class="box-body">
+                <div class="field-item">
+                  <span class="field-label">Tiêu đề nhật ký:</span>
+                  <input type="text" id="input-log-header" value="Nhật ký công việc" placeholder="Nhật ký công việc / Báo cáo ca">
+                </div>
+                <div class="field-item">
+                  <span class="field-label">Nội dung công việc:</span>
+                  <input type="text" id="input-log-content" value="Thử kín nội bộ tầng 3" placeholder="Nội dung thực hiện">
+                </div>
+                <div class="field-item">
+                  <span class="field-label">Địa điểm cụ thể:</span>
+                  <input type="text" id="input-log-place" value="Tầng 3 trục 1B" placeholder="Vị trí / Phân khu">
+                </div>
+              </div>
+            </div>
+
+            <!-- Mẫu: GPS Toạ Độ & Thời Tiết -->
+            <div class="form-group-box hidden" id="box-weather-controls">
+              <div class="box-header">
+                <span><i data-lucide="cloud-sun"></i> Thiết Lập GPS & Thời Tiết</span>
+              </div>
+              <div class="box-body">
+                <div class="field-item">
+                  <span class="field-label">Hướng la bàn (Compass):</span>
+                  <input type="text" id="input-weath-compass" value="SE 125°" placeholder="SE 125° / NW 310°">
+                </div>
+                <div class="field-item">
+                  <span class="field-label">Thời tiết & Nhiệt độ:</span>
+                  <input type="text" id="input-weath-temp" value="☀️ 28°C" placeholder="☀️ 28°C / ⛅ 31°C / 🌧️ 24°C">
+                </div>
+                <div class="field-item">
+                  <span class="field-label">Độ cao (Altitude):</span>
+                  <input type="text" id="input-weath-alt" value="Độ cao: 18m" placeholder="Độ cao: 18m hoặc ±16ft">
+                </div>
+              </div>
+            </div>
+
+            <!-- 7. Logo & Phụ Đề Góc Phải Dưới -->
+            <div class="form-group-box">
+              <div class="box-header">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="chk-show-logo" checked>
+                  <span><i data-lucide="stamp"></i> Logo & Chữ Góc Phải Dưới</span>
+                </label>
+              </div>
+              <div class="box-body" id="box-logo-controls">
+                <div class="input-row mb-1">
+                  <div class="input-col">
+                    <span class="input-sublabel">Tên chính (Màu vàng):</span>
+                    <input type="text" id="input-logo-title" value="Timemark" placeholder="Timemark">
+                  </div>
+                  <div class="input-col">
+                    <span class="input-sublabel">Phụ đề (Màu trắng):</span>
+                    <input type="text" id="input-logo-subtitle" value="100% Chân thực" placeholder="100% Chân thực hoặc Máy ảnh">
+                  </div>
+                </div>
+                <div class="quick-presets">
+                  <button type="button" class="btn-chip" data-preset-brand="photo-by-timemark" style="border-color: #f59e0b; color: #fbbf24;">Photo by Timemark (2 Ảnh mới)</button>
+                  <button type="button" class="btn-chip" data-preset-brand="timemark-true">100% Chân thực (Ảnh 1,4)</button>
+                  <button type="button" class="btn-chip" data-preset-brand="timemark-camera">Máy ảnh (Ảnh 3)</button>
+                  <button type="button" class="btn-chip" data-preset-brand="custom-brand">Tắt phụ đề</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 8. Mã Xác Thực Dọc Mép Phải (Security Verified Code) -->
+            <div class="form-group-box">
+              <div class="box-header">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="chk-show-vert-code" checked>
+                  <span><i data-lucide="shield-check"></i> Mã Xác Thực Dọc Mép Phải</span>
+                </label>
+                <button type="button" id="btn-gen-code" class="btn-text-action" title="Tạo mã ngẫu nhiên mới"><i data-lucide="dice-5"></i> Đổi mã khác</button>
+              </div>
+              <div class="box-body" id="box-vert-controls">
+                <div class="input-row">
+                  <input type="text" id="input-vert-code" value="XLTME4223GLDTC" placeholder="Mã bảo mật: L91YNTT6ML6GCN">
+                  <input type="text" id="input-vert-suffix" value="Timemark Verified" placeholder="Timemark Verified">
+                </div>
+              </div>
+            </div>
+
+            <!-- 9. Tuỳ biến Báo Cáo Hiện Trường (Chỉ hiện khi chọn mẫu Báo Cáo) -->
+            <div class="form-group-box hidden" id="box-work-controls">
+              <div class="box-header">
+                <span><i data-lucide="clipboard-list"></i> Thông Tin Báo Cáo / Giám Sát</span>
+              </div>
+              <div class="box-body">
+                <div class="field-item">
+                  <span class="field-label">Tên Dự án / Hạng mục:</span>
+                  <input type="text" id="input-work-project" value="DỰ ÁN: TÒA NHÀ VĂN PHÒNG" placeholder="Tên dự án">
+                </div>
+                <div class="field-item">
+                  <span class="field-label">Cán bộ phụ trách:</span>
+                  <input type="text" id="input-work-person" value="Giám sát: Nguyễn Văn Hưng" placeholder="Người kiểm tra">
+                </div>
+                <div class="field-item">
+                  <span class="field-label">Nội dung ghi chú:</span>
+                  <input type="text" id="input-work-note" value="Ghi chú: Đã nghiệm thu hiện trường hoàn tất" placeholder="Ghi chú công việc">
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Section 3: Tinh Chỉnh Kiểu Dáng, Vị Trí, Màu Sắc & Bóng Đổ -->
+        <div class="sidebar-card">
+          <div class="card-header">
+            <h3><i data-lucide="sliders"></i> Tinh Chỉnh Kiểu Dáng & Vị Trí</h3>
+          </div>
+          <div class="card-body">
+            
+            <!-- Vị trí Watermark -->
+            <div class="form-group">
+              <label><i data-lucide="move"></i> Vị trí đóng dấu chính</label>
+              <div class="position-selector">
+                <button type="button" class="pos-btn" data-pos="top-left" title="Góc trên trái">Góc Trên Trái ↖</button>
+                <button type="button" class="pos-btn" data-pos="top-right" title="Góc trên phải (Chuẩn Ảnh 2)">Góc Trên Phải ↗</button>
+                <button type="button" class="pos-btn active" data-pos="bottom-left" title="Góc dưới trái (Chuẩn Timemark Ảnh 1, 3, 4)">Góc Dưới Trái ↙</button>
+                <button type="button" class="pos-btn" data-pos="bottom-right" title="Góc dưới phải">Góc Dưới Phải ↘</button>
+              </div>
+            </div>
+
+            <!-- Tỷ lệ kích thước chữ (Scale) -->
+            <div class="form-group">
+              <div class="range-header">
+                <label for="range-scale"><i data-lucide="type"></i> Cỡ chữ / Tỷ lệ Watermark</label>
+                <span id="label-scale" class="range-val">100%</span>
+              </div>
+              <input type="range" id="range-scale" min="50" max="180" value="100" class="custom-range">
+            </div>
+
+            <!-- Khoảng cách lề (Padding Margin) -->
+            <div class="form-group">
+              <div class="range-header">
+                <label for="range-margin"><i data-lucide="maximize"></i> Khoảng cách lề (Padding)</label>
+                <span id="label-margin" class="range-val">4%</span>
+              </div>
+              <input type="range" id="range-margin" min="1" max="12" value="4" class="custom-range">
+            </div>
+
+            <!-- Màu sắc chữ & Vạch chia -->
+            <div class="form-row-2">
+              <div class="form-group">
+                <label for="color-text"><i data-lucide="palette"></i> Màu chữ chính</label>
+                <div class="color-picker-wrapper">
+                  <input type="color" id="color-text" value="#ffffff">
+                  <span class="color-val" id="color-text-val">#FFFFFF</span>
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="color-bar"><i data-lucide="minus-vertical"></i> Màu vạch chia / Logo</label>
+                <div class="color-picker-wrapper">
+                  <input type="color" id="color-bar" value="#f9c13a">
+                  <span class="color-val" id="color-bar-val">#F9C13A</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Độ đậm bóng đổ viền chữ (Text Shadow) -->
+            <div class="form-group">
+              <div class="range-header">
+                <label for="range-shadow"><i data-lucide="sun"></i> Bóng viền chống chìm màu nền</label>
+                <span id="label-shadow" class="range-val">Rõ nét (85%)</span>
+              </div>
+              <input type="range" id="range-shadow" min="0" max="100" value="85" class="custom-range">
+            </div>
+
+            <!-- Độ mờ Watermark (Opacity) -->
+            <div class="form-group">
+              <div class="range-header">
+                <label for="range-opacity"><i data-lucide="droplet"></i> Độ trong suốt Watermark</label>
+                <span id="label-opacity" class="range-val">100%</span>
+              </div>
+              <input type="range" id="range-opacity" min="30" max="100" value="100" class="custom-range">
+            </div>
+
+          </div>
+        </div>
+
+      </aside>
+    </main>
+
+    <!-- Camera Viewfinder Modal -->
+    <div id="camera-modal" class="modal-backdrop hidden">
+      <div class="camera-dialog">
+        <div class="camera-dialog-header">
+          <h3><i data-lucide="camera"></i> Chụp Ảnh Trực Tiếp Với Watermark</h3>
+          <button id="btn-close-camera" class="btn-icon"><i data-lucide="x"></i></button>
+        </div>
+        <div class="camera-viewfinder-container">
+          <video id="camera-video" autoplay playsinline></video>
+          <canvas id="camera-overlay-canvas"></canvas>
+        </div>
+        <div class="camera-controls">
+          <button id="btn-switch-camera" class="btn btn-secondary" title="Đổi camera trước / sau">
+            <i data-lucide="switch-camera"></i> Đổi Camera
+          </button>
+          <button id="btn-capture" class="btn-capture-shutter" title="Chụp ảnh ngay">
+            <div class="shutter-circle"></div>
+          </button>
+          <button id="btn-camera-gps" class="btn btn-secondary" title="Lấy toạ độ GPS">
+            <i data-lucide="map-pin"></i> GPS
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hidden source image object -->
+    <img id="source-img" style="display: none;" crossorigin="anonymous">
+  </div>
+
+  <!-- Scripts -->
+  <script src="js/exif-parser.js"></script>
+  <script src="js/geocoding.js"></script>
+  <script src="js/watermark-engine.js"></script>
+  <script src="js/camera.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,209 @@
+/**
+ * Geolocation & Reverse Geocoding Service
+ * Uses Browser Geolocation API and OpenStreetMap Nominatim for Vietnam & Global Address Resolution
+ */
+
+const GeoService = {
+  /**
+   * Get device current GPS position
+   * @returns {Promise<{latitude: number, longitude: number, accuracy: number}>}
+   */
+  getCurrentPosition() {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error('Trình duyệt không hỗ trợ Geolocation'));
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          resolve({
+            latitude: parseFloat(position.coords.latitude.toFixed(6)),
+            longitude: parseFloat(position.coords.longitude.toFixed(6)),
+            accuracy: Math.round(position.coords.accuracy || 16)
+          });
+        },
+        (error) => {
+          reject(error);
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    });
+  },
+
+  /**
+   * Reverse geocode coordinates to structured address using OpenStreetMap Nominatim
+   * @param {number} lat
+   * @param {number} lon
+   * @returns {Promise<{line1: string, line2: string, city: string, ward: string, country: string, fullAddress: string, raw: object}>}
+   */
+  async reverseGeocode(lat, lon) {
+    try {
+      const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1&accept-language=vi`;
+
+      // Timeout 8s bằng AbortController — tránh treo UI nhiều phút khi mạng nghẽn
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      let response;
+      try {
+        response = await fetch(url, {
+          headers: { 'Accept': 'application/json' },
+          signal: controller.signal
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
+
+      if (!response.ok) {
+        throw new Error('Lỗi khi tra cứu địa chỉ từ toạ độ');
+      }
+
+      const data = await response.json();
+      // Nominatim trả HTTP 200 kèm body {"error": "Unable to geocode"} cho toạ độ không tra được
+      if (data.error) {
+        throw new Error(data.error);
+      }
+      const addr = data.address || {};
+
+      // Parse components according to Vietnam structure
+      const houseNumber = addr.house_number || '';
+      const road = addr.road || addr.street || addr.suburb_district || '';
+      const ward = addr.suburb || addr.quarter || addr.neighbourhood || addr.village || '';
+      const district = addr.city_district || addr.district || addr.county || '';
+      const city = addr.city || addr.state || addr.province || 'Hà Nội';
+      const country = addr.country || 'Việt Nam';
+
+      let streetPart = [houseNumber, road].filter(Boolean).join(' ');
+      if (!streetPart) streetPart = ward || 'Vị trí hiện tại';
+
+      const wardLower = ward.toLowerCase();
+      let wardPart = wardLower.startsWith('phường') || wardLower.startsWith('p.') ? ward : (ward ? `P. ${ward}` : '');
+      // So sánh không phân biệt hoa/thường: Nominatim trả "Thành phố Thủ Đức" (p thường)
+      const cityLower = city.toLowerCase();
+      let cityPart = cityLower.includes('thành phố') || cityLower.includes('tỉnh') ? city : `Thành Phố ${city}`;
+
+      // Typical Timemark single/multi line format
+      const line1 = [streetPart, cityPart, wardPart].filter(Boolean).join(', ');
+      const line2 = district ? `${district}, ${city}` : cityPart;
+
+      return {
+        line1: line1 || data.display_name,
+        line2: line2 || cityPart,
+        street: streetPart,
+        ward: wardPart || ward,
+        district: district,
+        city: cityPart,
+        country: country,
+        fullAddress: data.display_name,
+        raw: addr
+      };
+    } catch (e) {
+      console.warn('Reverse geocoding error:', e);
+      // Fallback trung tính: chỉ hiển thị toạ độ, KHÔNG bịa tên thành phố
+      return {
+        line1: `Vị trí toạ độ (${lat.toFixed(4)}, ${lon.toFixed(4)})`,
+        line2: '',
+        street: 'Toạ độ GPS',
+        ward: '',
+        district: '',
+        city: '',
+        country: 'Việt Nam',
+        fullAddress: `Toạ độ: ${lat}, ${lon}`
+      };
+    }
+  },
+
+  // Day-of-week & month name lookup tables
+  daysOfWeekVi: ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'],
+  daysOfWeekEn: ['Sun', 'Mon', 'Tues', 'Wed', 'Thur', 'Fri', 'Sat'],
+  monthsEn: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+
+  /**
+   * Format date into various presets
+   */
+  formatDate(date, preset = 'vietnamese') {
+    const d = date instanceof Date ? date : new Date();
+    const day = d.getDate().toString().padStart(2, '0');
+    const dayUnpadded = d.getDate().toString();
+    const month = (d.getMonth() + 1).toString();
+    const monthPadded = (d.getMonth() + 1).toString().padStart(2, '0');
+    const monthEn = this.monthsEn[d.getMonth()];
+    const year = d.getFullYear();
+
+    switch (preset) {
+      case 'eng':
+        // e.g. "11 Aug 2026" (Chuẩn 2 ảnh mới)
+        return `${dayUnpadded} ${monthEn} ${year}`;
+      case 'vietnamese':
+        // e.g. "07 Tháng 8, 2026" or "11 Tháng 8, 2026"
+        return `${day} Tháng ${month}, ${year}`;
+      case 'slash':
+        // e.g. "08/07/2026"
+        return `${day}/${monthPadded}/${year}`;
+      case 'cjk':
+        // e.g. "2026年5月19日"
+        return `${year}年${month}月${day}日`;
+      case 'iso':
+        // e.g. "2026-08-11"
+        return `${year}-${monthPadded}-${day}`;
+      default:
+        return `${day} Tháng ${month}, ${year}`;
+    }
+  },
+
+  /**
+   * Format time into HH:mm or HH:mm:ss
+   */
+  formatTime(date, includeSeconds = false) {
+    const d = date instanceof Date ? date : new Date();
+    const hours = d.getHours().toString().padStart(2, '0');
+    const minutes = d.getMinutes().toString().padStart(2, '0');
+    const seconds = d.getSeconds().toString().padStart(2, '0');
+    return includeSeconds ? `${hours}:${minutes}:${seconds}` : `${hours}:${minutes}`;
+  },
+
+  /**
+   * Get day of week string in Vietnamese
+   */
+  getDayOfWeekVi(date) {
+    const d = date instanceof Date ? date : new Date();
+    return this.daysOfWeekVi[d.getDay()];
+  },
+
+  /**
+   * Get day of week string in English (e.g. "Tues", "Wed")
+   */
+  getDayOfWeekEn(date) {
+    const d = date instanceof Date ? date : new Date();
+    return this.daysOfWeekEn[d.getDay()];
+  },
+
+  /**
+   * Generate authentic Timemark verification security code (e.g. "149HXNC36GBETD", "L91YNTT6ML6GCN")
+   */
+  generateSecurityCode(length = 14) {
+    const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    let result = '';
+    for (let i = 0; i < length; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+  },
+
+  /**
+   * Format GPS coordinates string like Image 3
+   * e.g. "Tọa độ: 20.970515°N, 105.816296°E ±16ft"
+   * @param {number} accuracyM - độ chính xác tính bằng MÉT (chuẩn Geolocation API), tự quy đổi sang feet
+   */
+  formatCoordsString(lat, lon, accuracyM = 5) {
+    const latDir = lat >= 0 ? 'N' : 'S';
+    const lonDir = lon >= 0 ? 'E' : 'W';
+    const absLat = Math.abs(lat).toFixed(6);
+    const absLon = Math.abs(lon).toFixed(6);
+    const accuracyFt = Math.max(1, Math.round((accuracyM || 5) * 3.28084));
+    return `Tọa độ: ${absLat}°${latDir}, ${absLon}°${lonDir} ±${accuracyFt}ft`;
+  }
+};
+
+if (typeof window !== 'undefined') window.GeoService = GeoService;
+if (typeof globalThis !== 'undefined') globalThis.GeoService = GeoService;
