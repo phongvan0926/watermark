@@ -451,7 +451,20 @@ document.addEventListener('DOMContentLoaded', () => {
     boxVertControls.classList.toggle('hidden', !state.showVertCode);
     updateCanvas();
   });
-  inputVertCode.addEventListener('input', (e) => { state.vertCode = e.target.value; updateCanvas(); });
+  inputVertCode.addEventListener('input', (e) => {
+    // Tự chuẩn hoá mã tự nhập: viết hoa + chỉ giữ chữ/số cho khớp định dạng
+    const el = e.target;
+    const caret = el.selectionStart;
+    const before = el.value;
+    const cleaned = before.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (cleaned !== before) {
+      el.value = cleaned;
+      const removed = before.length - cleaned.length;
+      try { el.setSelectionRange(Math.max(0, caret - removed), Math.max(0, caret - removed)); } catch (_) {}
+    }
+    state.vertCode = cleaned;
+    updateCanvas();
+  });
   inputVertSuffix.addEventListener('input', (e) => { state.vertSuffix = e.target.value; updateCanvas(); });
   btnGenCode.addEventListener('click', () => {
     state.vertCode = GeoService.generateSecurityCode(14);

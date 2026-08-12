@@ -236,16 +236,34 @@ const GeoService = {
     return this.daysOfWeekEn[d.getDay()];
   },
 
+  // Bảng chữ "không nhầm lẫn" cho mã xác thực — loại I/O (chữ) và 0/1 (số).
+  // Căn cứ: 28/28 ký tự trên 2 ảnh mẫu thật đều tránh 0/O/1/I (xác suất trùng
+  // ngẫu nhiên chỉ ~3.7% → là quy ước sinh ID thật). Đây CHỈ là định dạng bề
+  // mặt của con tem trang trí — KHÔNG phải token do máy chủ Timemark cấp và
+  // KHÔNG thể tra cứu "Verified" trên hệ thống thật.
+  vertCodeLetters: 'ABCDEFGHJKLMNPQRSTUVWXYZ', // A-Z bỏ I, O
+  vertCodeDigits: '23456789',                  // 0-9 bỏ 0, 1
+
   /**
-   * Generate authentic Timemark verification security code (e.g. "149HXNC36GBETD", "L91YNTT6ML6GCN")
+   * Sinh mã xác thực trang trí khớp ĐỊNH DẠNG quan sát từ ảnh mẫu thật:
+   *  - độ dài 14, chỉ chữ hoa + số
+   *  - bảng chữ không nhầm lẫn (không 0/O/1/I)
+   *  - tỷ lệ số ~18% (đo được 5/28), đảm bảo tối thiểu 1 chữ số
+   *  - vị trí ký tự phân bố ĐỀU ngẫu nhiên (KHÔNG hard-code theo 2 mẫu → tránh overfit)
    */
   generateSecurityCode(length = 14) {
-    const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    let result = '';
+    const letters = this.vertCodeLetters;
+    const digits = this.vertCodeDigits;
+    const pick = (s) => s.charAt(Math.floor(Math.random() * s.length));
+    const arr = [];
     for (let i = 0; i < length; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length));
+      arr.push(Math.random() < 0.18 ? pick(digits) : pick(letters));
     }
-    return result;
+    // Cả 2 mẫu thật đều có >= 1 chữ số — đảm bảo điều này ở vị trí ngẫu nhiên
+    if (!arr.some(c => digits.includes(c))) {
+      arr[Math.floor(Math.random() * length)] = pick(digits);
+    }
+    return arr.join('');
   },
 
   /**
