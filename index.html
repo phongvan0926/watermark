@@ -95,11 +95,19 @@
         <!-- Batch Thumbnails Strip (khi tải nhiều ảnh cùng lúc) -->
         <div id="batch-strip" class="batch-strip hidden">
           <div class="batch-header">
-            <span><i data-lucide="layers"></i> Danh sách ảnh (<span id="batch-count">0</span> ảnh):</span>
+            <span class="batch-title"><i data-lucide="layers"></i> Danh sách ảnh (<span id="batch-count">0</span>):</span>
+            <label class="batch-toggle" title="Mỗi ảnh một mã xác thực riêng, giờ cộng dồn ngẫu nhiên 0–2 phút cho ảnh sau">
+              <input type="checkbox" id="chk-per-image" checked>
+              <span>🎲 Mỗi ảnh mã riêng + giờ +0–2′</span>
+            </label>
+            <button id="btn-reroll-batch" class="btn btn-secondary btn-xs" title="Tạo lại toàn bộ mã & giờ cho loạt ảnh">
+              <i data-lucide="dice-5"></i> Tạo lại
+            </button>
             <button id="btn-download-zip" class="btn btn-success btn-xs">
               <i data-lucide="archive"></i> Tải Tất Cả (ZIP)
             </button>
           </div>
+          <div id="batch-variation-note" class="batch-note hidden"></div>
           <div class="batch-thumbnails" id="batch-thumbnails"></div>
         </div>
       </section>

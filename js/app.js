@@ -86,7 +86,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Image Data
     currentImage: null,
     batchImages: [],
-    activeBatchIndex: 0
+    activeBatchIndex: 0,
+
+    // Tải hàng loạt: mỗi ảnh một mã xác thực riêng + giờ lệch nhẹ (+0/1/2 phút cộng dồn)
+    perImageVariation: true
   };
 
   // --- 2. DOM Elements ---
@@ -209,11 +212,64 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initialize Camera Controller
   CameraController.init(state);
 
+  // --- Biến thể per-image cho tải hàng loạt ---
+  // Ảnh trong batch đang được xem (khớp currentImage); null nếu đang xem ảnh mẫu/khác
+  function activeBatchItem() {
+    const item = state.batchImages[state.activeBatchIndex];
+    return (item && item.img === state.currentImage) ? item : null;
+  }
+
+  // Gán mã xác thực DUY NHẤT + offset giờ cộng dồn (+0/1/2 phút) cho từng ảnh
+  function assignBatchVariations() {
+    const seen = new Set();
+    let offset = 0;
+    state.batchImages.forEach((item, i) => {
+      if (i > 0) offset += Math.floor(Math.random() * 3); // ảnh sau +0, +1 hoặc +2 phút
+      item._timeOffset = i === 0 ? 0 : offset;
+      let code;
+      do { code = GeoService.generateSecurityCode(14); } while (seen.has(code));
+      seen.add(code);
+      item._vertCode = code;
+    });
+  }
+
+  // Mã hiển thị trên ô nhập cho ảnh đang xem
+  function displayVertCode() {
+    const item = activeBatchItem();
+    return (state.perImageVariation && item && item._vertCode) ? item._vertCode : state.vertCode;
+  }
+
+  // State thực dùng để render 1 ảnh batch (áp mã & giờ riêng khi bật biến thể)
+  function renderStateFor(item) {
+    if (state.perImageVariation && item && item._vertCode) {
+      return Object.assign({}, state, {
+        vertCode: item._vertCode,
+        time: GeoService.addMinutesToTime(state.time, item._timeOffset || 0)
+      });
+    }
+    return state;
+  }
+
+  function updateBatchNote() {
+    const note = document.getElementById('batch-variation-note');
+    if (!note) return;
+    const item = activeBatchItem();
+    if (state.perImageVariation && item && item._vertCode) {
+      const t = GeoService.addMinutesToTime(state.time, item._timeOffset || 0);
+      const off = item._timeOffset ? ` (+${item._timeOffset}′)` : '';
+      note.textContent = `Ảnh #${state.activeBatchIndex + 1}/${state.batchImages.length} · mã ${item._vertCode} · giờ ${t}${off}`;
+      note.classList.remove('hidden');
+    } else {
+      note.classList.add('hidden');
+    }
+  }
+
   // --- 3. Render Trigger ---
   function updateCanvas() {
     if (!state.currentImage) return;
 
-    WatermarkEngine.render(mainCanvas, state.currentImage, state);
+    WatermarkEngine.render(mainCanvas, state.currentImage, renderStateFor(activeBatchItem()));
+    updateBatchNote();
 
     // Update Resolution Badge (kèm nhãn tỷ lệ nếu là tỷ lệ phổ biến, ví dụ "(4:3)")
     const w = state.currentImage.naturalWidth || state.currentImage.width;
@@ -282,7 +338,7 @@ document.addEventListener('DOMContentLoaded', () => {
     boxLogoControls.classList.toggle('hidden', !state.showLogo);
 
     chkShowVertCode.checked = state.showVertCode;
-    inputVertCode.value = state.vertCode;
+    inputVertCode.value = displayVertCode();
     inputVertSuffix.value = state.vertSuffix;
     boxVertControls.classList.toggle('hidden', !state.showVertCode);
 
@@ -462,13 +518,19 @@ document.addEventListener('DOMContentLoaded', () => {
       const removed = before.length - cleaned.length;
       try { el.setSelectionRange(Math.max(0, caret - removed), Math.max(0, caret - removed)); } catch (_) {}
     }
-    state.vertCode = cleaned;
+    // Khi đang bật biến thể per-image và xem 1 ảnh batch: sửa mã CỦA RIÊNG ảnh đó
+    const item = activeBatchItem();
+    if (state.perImageVariation && item) item._vertCode = cleaned;
+    else state.vertCode = cleaned;
     updateCanvas();
   });
   inputVertSuffix.addEventListener('input', (e) => { state.vertSuffix = e.target.value; updateCanvas(); });
   btnGenCode.addEventListener('click', () => {
-    state.vertCode = GeoService.generateSecurityCode(14);
-    inputVertCode.value = state.vertCode;
+    const newCode = GeoService.generateSecurityCode(14);
+    const item = activeBatchItem();
+    if (state.perImageVariation && item) item._vertCode = newCode;
+    else state.vertCode = newCode;
+    inputVertCode.value = newCode;
     updateCanvas();
   });
 
@@ -740,6 +802,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       state.batchImages = loaded;
       state.activeBatchIndex = 0;
+      assignBatchVariations(); // mỗi ảnh 1 mã riêng + giờ lệch +0/1/2 phút cộng dồn
 
       // First file EXIF parse
       const firstFile = loaded[0].file;
@@ -787,6 +850,8 @@ document.addEventListener('DOMContentLoaded', () => {
     state.activeBatchIndex = index;
     state.currentImage = state.batchImages[index].img;
     updateCanvas();
+    // Ô mã hiển thị đúng mã của ảnh đang xem
+    if (inputVertCode) inputVertCode.value = displayVertCode();
 
     document.querySelectorAll('.batch-thumb-item').forEach((item, i) => {
       item.classList.toggle('active', i === index);
@@ -794,7 +859,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function renderBatchThumbnails() {
-    if (state.batchImages.length <= 1) {
+    if (state.batchImages.length < 1) {
       batchStrip.classList.add('hidden');
       return;
     }
@@ -806,11 +871,37 @@ document.addEventListener('DOMContentLoaded', () => {
     state.batchImages.forEach((item, i) => {
       const thumb = document.createElement('div');
       thumb.className = `batch-thumb-item ${i === state.activeBatchIndex ? 'active' : ''}`;
+      thumb.title = item._vertCode ? `Ảnh #${i + 1} · mã ${item._vertCode}` : `Ảnh #${i + 1}`;
       const img = document.createElement('img');
       img.src = item.img.src;
+      const idx = document.createElement('span');
+      idx.className = 'thumb-index';
+      idx.textContent = i + 1;
       thumb.appendChild(img);
+      thumb.appendChild(idx);
       thumb.addEventListener('click', () => selectBatchImage(i));
       batchThumbnails.appendChild(thumb);
+    });
+    updateBatchNote();
+  }
+
+  // Toggle & nút tạo lại biến thể per-image
+  const chkPerImage = document.getElementById('chk-per-image');
+  const btnRerollBatch = document.getElementById('btn-reroll-batch');
+  if (chkPerImage) {
+    chkPerImage.checked = state.perImageVariation;
+    chkPerImage.addEventListener('change', (e) => {
+      state.perImageVariation = e.target.checked;
+      if (inputVertCode) inputVertCode.value = displayVertCode();
+      updateCanvas();
+    });
+  }
+  if (btnRerollBatch) {
+    btnRerollBatch.addEventListener('click', () => {
+      if (!state.batchImages.length) return;
+      assignBatchVariations();
+      if (inputVertCode) inputVertCode.value = displayVertCode();
+      updateCanvas();
     });
   }
 
@@ -1087,9 +1178,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     updateCanvas();
     const link = document.createElement('a');
-    const timeClean = state.time.replace(/:/g, '-');
+    const item = activeBatchItem();
+    const effTime = (state.perImageVariation && item) ? GeoService.addMinutesToTime(state.time, item._timeOffset || 0) : state.time;
+    const timeClean = effTime.replace(/:/g, '-');
     const dateClean = state.date.replace(/[\s,\/]/g, '_');
-    link.download = `timemark_${dateClean}_${timeClean}.jpg`;
+    const codeTag = (state.perImageVariation && item && item._vertCode) ? `_${item._vertCode}` : '';
+    link.download = `timemark_${dateClean}_${timeClean}${codeTag}.jpg`;
     link.href = mainCanvas.toDataURL('image/jpeg', 0.96);
     link.click();
   });
@@ -1134,14 +1228,19 @@ document.addEventListener('DOMContentLoaded', () => {
     btnDownloadZip.innerHTML = '<div class="spinner" style="width:12px;height:12px;border-width:2px;display:inline-block"></div> Đang xử lý...';
 
     try {
+      const pad = String(state.batchImages.length).length;
       for (let i = 0; i < state.batchImages.length; i++) {
         const item = state.batchImages[i];
-        WatermarkEngine.render(tempCanvas, item.img, state);
+        // Mỗi ảnh render bằng biến thể riêng: mã xác thực + giờ lệch của chính nó
+        WatermarkEngine.render(tempCanvas, item.img, renderStateFor(item));
 
         const dataUrl = tempCanvas.toDataURL('image/jpeg', 0.95);
         const base64Data = dataUrl.replace(/^data:image\/jpeg;base64,/, '');
         const originalName = item.name.replace(/\.[^/.]+$/, '');
-        zip.file(`${originalName}_timemark.jpg`, base64Data, { base64: true });
+        // Tên file gắn số thứ tự + mã để dễ truy vết và không trùng
+        const seq = String(i + 1).padStart(pad, '0');
+        const codeTag = (state.perImageVariation && item._vertCode) ? `_${item._vertCode}` : '';
+        zip.file(`${seq}_${originalName}${codeTag}_timemark.jpg`, base64Data, { base64: true });
       }
 
       const zipBlob = await zip.generateAsync({ type: 'blob' });
@@ -1215,6 +1314,8 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (e) { /* vẫn tiếp tục với ảnh hiện có */ }
     state.currentImage = capturedImg;
     state.batchImages = [{ img: capturedImg, name: 'camera_capture.jpg' }];
+    state.activeBatchIndex = 0;
+    assignBatchVariations();
     renderBatchThumbnails();
     updateCanvas();
     CameraController.stopStream();

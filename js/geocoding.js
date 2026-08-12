@@ -221,6 +221,25 @@ const GeoService = {
   },
 
   /**
+   * Cộng thêm số phút vào chuỗi giờ "HH:mm" hoặc "HH:mm:ss" (cuộn vòng 24h, giữ nguyên
+   * định dạng & phần giây). Nếu chuỗi không đúng dạng giờ thì trả nguyên vẹn.
+   * Dùng cho tính năng lệch giờ nhẹ giữa các ảnh trong loạt tải hàng loạt.
+   */
+  addMinutesToTime(timeStr, minutes) {
+    if (!minutes) return timeStr;
+    const m = String(timeStr).match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+    if (!m) return timeStr;
+    const h = parseInt(m[1], 10);
+    const mi = parseInt(m[2], 10);
+    const sec = m[3];
+    let total = (h * 60 + mi + minutes) % (24 * 60);
+    if (total < 0) total += 24 * 60;
+    const hh = String(Math.floor(total / 60)).padStart(2, '0');
+    const mm = String(total % 60).padStart(2, '0');
+    return sec != null ? `${hh}:${mm}:${sec}` : `${hh}:${mm}`;
+  },
+
+  /**
    * Get day of week string in Vietnamese
    */
   getDayOfWeekVi(date) {

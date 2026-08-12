@@ -17,7 +17,7 @@ Công cụ web đóng dấu **ngày giờ + địa chỉ + toạ độ GPS + mã
 - **📍 Tìm GPS theo địa chỉ**: gõ địa chỉ bất kỳ → tự tra toạ độ (OpenStreetMap Nominatim) → một cú bấm điền địa chỉ + toạ độ vào ảnh.
 - **Đọc EXIF tự động**: tải ảnh lên là tự lấy ngày chụp gốc + toạ độ GPS trong ảnh (nếu có) và dịch ngược thành địa chỉ tiếng Việt.
 - **Chụp trực tiếp từ camera** với watermark xem trước theo thời gian thực.
-- **Xử lý hàng loạt**: kéo thả nhiều ảnh, tải về cả gói ZIP.
+- **Xử lý hàng loạt thông minh**: kéo thả nhiều ảnh, tải về cả gói ZIP — **mỗi ảnh tự nhận một mã xác thực riêng duy nhất** và **giờ lệch nhẹ** (ảnh sau cộng dồn ngẫu nhiên 0/1/2 phút), mọi thông tin khác giữ nguyên. Bật/tắt và tạo lại toàn bộ chỉ bằng một nút.
 - **Tuỳ biến toàn bộ**: mọi dòng chữ, 4 vị trí góc, cỡ chữ, lề, màu sắc, bóng đổ, độ trong suốt; hỗ trợ 4 tỷ lệ khung 4:3 / 3:4 / 16:9 / 9:16 với độ chính xác pixel trên mọi độ phân giải (720p → 12MP).
 - **Riêng tư tuyệt đối**: mọi xử lý ảnh diễn ra trong trình duyệt (Canvas API) — không upload ảnh lên bất kỳ máy chủ nào.
 
@@ -56,10 +56,12 @@ Zero-Dependency thuần HTML5 / CSS / JavaScript ES6+ — không framework, khô
 cd tests
 npm install
 npx playwright install chromium
-node ui-test.js   # 55/55 PASS
+node ui-test.js         # 55/55 — UI, reachability, geocode, camera
+node batch-test.js      # 11/11 — mỗi ảnh mã & giờ riêng khi tải hàng loạt
+node vert-code-test.js  #  8/8  — định dạng mã xác thực
 ```
 
-Bộ test kiểm tra: mọi nút bấm được trên 4 kích thước màn hình, 12 mẫu × 4 vị trí không lỗi, accordion/điều hướng, trọn luồng tìm GPS theo địa chỉ (mock API), và chụp camera giả lập đầu-cuối.
+Bộ test kiểm tra: mọi nút bấm được trên 4 kích thước màn hình, 12 mẫu × 4 vị trí không lỗi, accordion/điều hướng, trọn luồng tìm GPS theo địa chỉ (mock API), chụp camera giả lập đầu-cuối, và loạt tải hàng loạt (mỗi ảnh mã duy nhất + giờ cộng dồn 0–2′).
 
 ## 📖 Tài liệu kỹ thuật
 
