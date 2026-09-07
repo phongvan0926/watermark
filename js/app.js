@@ -1414,7 +1414,19 @@ document.addEventListener('DOMContentLoaded', () => {
         });
       }
     } catch (err) {
-      setGeoStatus('Lỗi khi tra cứu: ' + (err && err.message || err), true);
+      // "Failed to fetch" = trình duyệt không kết nối được (mất mạng, DNS/tường lửa
+      // của nhà mạng chặn dịch vụ bản đồ, hoặc tiện ích chặn quảng cáo can thiệp)
+      const raw = String((err && err.message) || err);
+      const offline = (typeof navigator !== 'undefined' && navigator.onLine === false);
+      let msg;
+      if (offline) {
+        msg = 'Máy đang mất kết nối mạng. Hãy kiểm tra Internet rồi thử lại.';
+      } else if (/failed to fetch|networkerror|không kết nối được/i.test(raw)) {
+        msg = 'Không kết nối được dịch vụ tra cứu địa chỉ. Mạng của bạn có thể đang chặn máy chủ bản đồ — thử đổi DNS (8.8.8.8 / 1.1.1.1), tắt tiện ích chặn quảng cáo, hoặc dùng mạng khác. Bạn vẫn có thể nhập địa chỉ và toạ độ thủ công ở phần bên dưới.';
+      } else {
+        msg = 'Lỗi khi tra cứu: ' + raw;
+      }
+      setGeoStatus(msg, true);
     } finally {
       if (btnGeoSearch) btnGeoSearch.disabled = false;
     }

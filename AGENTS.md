@@ -22,12 +22,12 @@ c:\Users\Admin\Desktop\Water Mark\
 │   └── style.css               # Toàn bộ giao diện Dark Glassmorphism, CSS Tokens, accordion, nav chip, batch strip, responsive
 ├── js/
 │   ├── exif-parser.js          # Bộ phân tích nhị phân JPEG EXIF (ngày chụp DateTimeOriginal, toạ độ GPS Lat/Lon), có validate chống ngày rác
-│   ├── geocoding.js            # Geolocation API, tra địa chỉ NGƯỢC + XUÔI (Nominatim), sinh mã xác thực, addMinutesToTime
+│   ├── geocoding.js            # Geolocation API, tra địa chỉ NGƯỢC + XUÔI với 2 nhà cung cấp dự phòng (Nominatim -> Photon), sinh mã xác thực, addMinutesToTime
 │   ├── watermark-engine.js     # Lõi vẽ Canvas 2D, co giãn tỷ lệ động, 12 hàm vẽ mẫu, preloadFonts, anchorBlock 4 góc, logo 2 tông màu, mã xoay -90°
 │   ├── camera.js               # Camera trực tiếp (MediaDevices), lật camera, live overlay loop, chống race bằng token thế hệ
 │   └── app.js                  # State Controller, two-way binding, biến thể per-image cho loạt ảnh, tải ZIP, tìm GPS
 ├── tests/                      # Bộ test Playwright (package.json RIÊNG — app chính vẫn Zero-Dependency)
-│   ├── ui-test.js              # 55 kiểm thử: reachability đa viewport, 12 mẫu × 4 vị trí, accordion, geocode (mock), camera giả lập
+│   ├── ui-test.js              # 59 kiểm thử: reachability đa viewport, 12 mẫu × 4 vị trí, accordion, geocode + fallback nhà cung cấp, camera giả lập
 │   ├── batch-test.js           # 11 kiểm thử: mỗi ảnh mã duy nhất + giờ cộng dồn 0–2 phút
 │   └── vert-code-test.js       #  8 kiểm thử: định dạng mã xác thực trên 20.000 mẫu sinh ra
 ├── assets/                     # Ảnh chụp màn hình dùng trong README
@@ -128,7 +128,7 @@ Từ v1.4.0, mẫu `timemark-standard` dùng **hệ đơn vị scale thống nh�
      ```bash
      node tests/ui-test.js && node tests/batch-test.js && node tests/vert-code-test.js
      ```
-     Hiện trạng chuẩn: **74/74 PASS** (55 + 11 + 8). Nếu thêm tính năng, phải bổ sung test tương ứng.
+     Hiện trạng chuẩn: **78/78 PASS** (59 + 11 + 8). Nếu thêm tính năng, phải bổ sung test tương ứng.
 5. **QUY TRÌNH BẮT BUỘC SAU MỖI LẦN HOÀN THÀNH CÔNG VIỆC** (yêu cầu trực tiếp của chủ dự án):
    - **a. Cập nhật tài liệu:** thêm mô tả tính năng vào `README.md` (góc nhìn người dùng cuối) và thêm mục vào **Nhật Ký Thay Đổi (Changelog)** cuối file `AGENTS.md` (góc nhìn kỹ thuật) — kèm cập nhật các mục 2/3/4 nếu cấu trúc, công thức hay danh sách mẫu thay đổi.
    - **b. Commit** với message tiếng Việt mô tả rõ thay đổi.
@@ -188,3 +188,10 @@ Từ v1.4.0, mẫu `timemark-standard` dùng **hệ đơn vị scale thống nh�
   - **Cập nhật Codebase Manifest (mục 2)** cho khớp thực tế: bổ sung `tests/` (3 bộ test), `assets/`, `.github/workflows/deploy-pages.yml`, `README.md`; mô tả lại vai trò từng file JS theo đúng chức năng hiện tại (forwardGeocode, preloadFonts, anchorBlock, biến thể per-image, chống race camera).
   - **Bổ sung quy tắc chạy test trước khi bàn giao** (mục 4): `node --check` cho từng file + chạy đủ 3 bộ test, mốc chuẩn **74/74 PASS**.
   - **README.md hoàn thiện:** badge phiên bản + tổng số test đúng thực tế (74/74), ảnh minh hoạ tính năng tải hàng loạt, cây thư mục đầy đủ, mục giải thích minh bạch bản chất mã xác thực dọc (tem trang trí, không phải token tra cứu được), ghi chú UI gọn gàng.
+- **v1.6.2 (Sửa Lỗi "Failed to fetch" Khi Tra Cứu Địa Chỉ — Dự Phòng 2 Nhà Cung Cấp):**
+  - **Nguyên nhân gốc (đã chẩn đoán, KHÔNG phải lỗi code):** `nominatim.openstreetmap.org` bị phân giải DNS về `127.0.0.1` trên mạng của người dùng (file `hosts` sạch → chặn ở tầng DNS nhà mạng/bộ lọc). `curl` trả `HTTP=000`, exit 7 (không kết nối được) → trình duyệt báo `Failed to fetch`. Lỗi này làm hỏng CẢ 3 luồng: Tìm GPS theo địa chỉ, nút GPS Tự Động, và tra địa chỉ từ EXIF.
+  - **Giải pháp — dự phòng tự động sang Photon (komoot):** cùng dữ liệu OpenStreetMap, trả `Access-Control-Allow-Origin: *`, không cần API key, hoạt động tốt trên mạng bị chặn Nominatim. Cả `forwardGeocode()` và `reverseGeocode()` giờ thử Nominatim trước (dữ liệu chi tiết hơn) rồi tự chuyển sang Photon khi lỗi/bị chặn.
+  - **Tái cấu trúc `geocoding.js`:** tách helper dùng chung `fetchJson()` (timeout AbortController 8s), `formatWard()` / `formatCity()` (chuẩn hoá "P. X" / "Thành Phố Y", không phân biệt hoa thường), `parseNominatimAddress()` và `parsePhotonFeature()` cùng trả về MỘT cấu trúc địa chỉ chuẩn (thêm trường `provider` để truy vết nguồn). Giữ nguyên hợp đồng dữ liệu nên `app.js` không phải đổi.
+  - **Thông báo lỗi thân thiện:** thay vì hiện thẳng `Failed to fetch`, app phân biệt mất mạng (`navigator.onLine`) và bị chặn máy chủ, rồi hướng dẫn cụ thể (đổi DNS 8.8.8.8/1.1.1.1, tắt tiện ích chặn quảng cáo, hoặc nhập tay).
+  - **Kiểm chứng thực tế trên chính mạng đang bị chặn:** forward trả 5 kết quả trong 1.185 giây, định dạng đúng ("143 Đường Nguyễn Ngọc Vũ, P. Yên Hoà" / "Thành Phố Hà Nội"); reverse cũng chạy qua Photon.
+  - **4 test hồi quy mới trong `ui-test.js`** (55 → 59): giả lập Nominatim bị chặn → phải tự dùng Photon và điền đúng địa chỉ + toạ độ; cả 2 nguồn hỏng → phải hiện thông báo tiếng Việt dễ hiểu, KHÔNG lộ chuỗi "Failed to fetch". Tổng bộ test: **78/78 PASS**.

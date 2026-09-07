@@ -195,6 +195,44 @@ async function main() {
   const statusTxt = await page.textContent('#geo-search-status');
   check('hiện thông báo đã điền', statusTxt.includes('Đã điền'), statusTxt.trim());
 
+  // === HỒI QUY: Nominatim bị chặn (DNS/tường lửa) -> phải tự chuyển sang Photon ===
+  // Tái hiện đúng lỗi "Failed to fetch" người dùng gặp trên bản live.
+  await page.route('**/nominatim.openstreetmap.org/**', route => route.abort('failed'));
+  await page.route('**/photon.komoot.io/api/**', route => {
+    route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({
+        features: [{
+          type: 'Feature',
+          properties: { name: 'Đường Trần Duy Hưng', street: 'Đường Trần Duy Hưng', housenumber: '99', district: 'Yên Hoà', city: 'Hà Nội', country: 'Việt Nam' },
+          geometry: { type: 'Point', coordinates: [105.803360, 21.014520] }
+        }]
+      })
+    });
+  });
+  await page.fill('#input-geo-search', 'Tran Duy Hung, Ha Noi');
+  await page.press('#input-geo-search', 'Enter');
+  await page.waitForSelector('.geo-result-item', { timeout: 8000 });
+  const fbCount = await page.$$eval('.geo-result-item', els => els.length);
+  check('Nominatim chặn -> tự dùng Photon, vẫn ra kết quả', fbCount === 1, `thấy ${fbCount}`);
+  await page.click('.geo-result-item');
+  await page.waitForTimeout(300);
+  const fbAddr = await page.inputValue('#input-addr-1');
+  const fbGps = await page.inputValue('#input-custom-gps');
+  check('fallback Photon điền đúng địa chỉ', fbAddr.includes('Trần Duy Hưng'), fbAddr);
+  check('fallback Photon điền đúng toạ độ', /21\.014520°N, 105\.803360°E/.test(fbGps), fbGps);
+
+  // Cả hai nhà cung cấp đều hỏng -> báo lỗi thân thiện, KHÔNG hiện "Failed to fetch"
+  await page.route('**/photon.komoot.io/**', route => route.abort('failed'));
+  await page.fill('#input-geo-search', 'Dia chi khong the tra cuu');
+  await page.press('#input-geo-search', 'Enter');
+  await page.waitForTimeout(1200);
+  const errTxt = (await page.textContent('#geo-search-status')).trim();
+  check('cả 2 nguồn hỏng -> thông báo tiếng Việt dễ hiểu', errTxt.includes('Không kết nối được') && !/Failed to fetch/i.test(errTxt), errTxt.slice(0, 90));
+  await page.unroute('**/nominatim.openstreetmap.org/**');
+  await page.unroute('**/photon.komoot.io/**');
+  await page.unroute('**/photon.komoot.io/api/**');
+
   // Camera modal với thiết bị giả lập: nút chụp phải nằm trong màn hình
   await page.evaluate(() => document.getElementById('btn-open-camera').click());
   await page.waitForTimeout(1500);

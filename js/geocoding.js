@@ -32,181 +32,186 @@ const GeoService = {
   },
 
   /**
-   * Reverse geocode coordinates to structured address using OpenStreetMap Nominatim
-   * @param {number} lat
-   * @param {number} lon
-   * @returns {Promise<{line1: string, line2: string, city: string, ward: string, country: string, fullAddress: string, raw: object}>}
+   * Gọi JSON có timeout (AbortController) — tránh treo UI khi mạng nghẽn hoặc bị chặn.
+   * Ném lỗi nếu quá hạn / không kết nối được / HTTP không thành công.
+   */
+  async fetchJson(url, timeoutMs = 8000) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(url, {
+        headers: { 'Accept': 'application/json' },
+        signal: controller.signal
+      });
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      return await response.json();
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  },
+
+  /** Chuẩn hoá tên phường/xã theo cách viết Việt Nam */
+  formatWard(ward) {
+    if (!ward) return '';
+    const low = String(ward).toLowerCase();
+    return (low.startsWith('phường') || low.startsWith('p.') || low.startsWith('xã') || low.startsWith('thị trấn'))
+      ? ward : `P. ${ward}`;
+  },
+
+  /** Chuẩn hoá tên tỉnh/thành theo cách viết Việt Nam */
+  formatCity(city) {
+    if (!city) return '';
+    const low = String(city).toLowerCase();
+    return (low.includes('thành phố') || low.includes('tỉnh')) ? city : `Thành Phố ${city}`;
+  },
+
+  /** Chuyển 1 kết quả Nominatim -> cấu trúc địa chỉ chuẩn của app */
+  parseNominatimAddress(item) {
+    const addr = item.address || {};
+    const houseNumber = addr.house_number || '';
+    const road = addr.road || addr.street || addr.suburb_district || '';
+    const ward = addr.suburb || addr.quarter || addr.neighbourhood || addr.village || '';
+    const district = addr.city_district || addr.district || addr.county || '';
+    const city = addr.city || addr.state || addr.province || '';
+    const country = addr.country || 'Việt Nam';
+
+    let streetPart = [houseNumber, road].filter(Boolean).join(' ');
+    if (!streetPart) streetPart = item.name || ward || district || city || 'Vị trí hiện tại';
+
+    const wardPart = this.formatWard(ward);
+    const cityPart = this.formatCity(city);
+
+    return {
+      latitude: parseFloat(item.lat),
+      longitude: parseFloat(item.lon),
+      displayName: item.display_name || [streetPart, wardPart, cityPart, country].filter(Boolean).join(', '),
+      line1: [streetPart, wardPart].filter(Boolean).join(', '),
+      line2: district ? `${district}, ${city}` : cityPart,
+      street: streetPart,
+      ward: wardPart,
+      district: district,
+      city: cityPart,
+      country: country,
+      fullAddress: item.display_name || '',
+      provider: 'nominatim'
+    };
+  },
+
+  /** Chuyển 1 feature Photon (GeoJSON) -> cấu trúc địa chỉ chuẩn của app */
+  parsePhotonFeature(feature) {
+    const p = (feature && feature.properties) || {};
+    const coords = (feature && feature.geometry && feature.geometry.coordinates) || [];
+    const streetName = p.street || p.name || '';
+    let streetPart = [p.housenumber, streetName].filter(Boolean).join(' ');
+    if (!streetPart) streetPart = p.locality || p.district || p.city || 'Vị trí hiện tại';
+
+    // Photon (VN): "district" thường ứng với phường/quận, "county" mới là cấp huyện
+    const ward = p.district || p.locality || '';
+    const district = p.county || '';
+    const city = p.city || p.state || '';
+    const country = p.country || 'Việt Nam';
+
+    const wardPart = this.formatWard(ward);
+    const cityPart = this.formatCity(city);
+
+    return {
+      latitude: coords[1],
+      longitude: coords[0],
+      displayName: [streetPart, wardPart, district, cityPart, country].filter(Boolean).join(', '),
+      line1: [streetPart, wardPart].filter(Boolean).join(', '),
+      line2: district ? `${district}, ${city}` : cityPart,
+      street: streetPart,
+      ward: wardPart,
+      district: district,
+      city: cityPart,
+      country: country,
+      fullAddress: [streetPart, wardPart, district, cityPart, country].filter(Boolean).join(', '),
+      provider: 'photon'
+    };
+  },
+
+  /**
+   * Reverse geocode: toạ độ -> địa chỉ. Thử Nominatim trước (dữ liệu chi tiết hơn),
+   * nếu hỏng/bị chặn thì tự chuyển sang Photon (komoot) — cùng dữ liệu OpenStreetMap,
+   * hỗ trợ CORS, không cần API key. Luôn trả về object (có fallback trung tính).
    */
   async reverseGeocode(lat, lon) {
     try {
       const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1&accept-language=vi`;
-
-      // Timeout 8s bằng AbortController — tránh treo UI nhiều phút khi mạng nghẽn
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000);
-      let response;
-      try {
-        response = await fetch(url, {
-          headers: { 'Accept': 'application/json' },
-          signal: controller.signal
-        });
-      } finally {
-        clearTimeout(timeoutId);
+      const data = await this.fetchJson(url);
+      if (data && !data.error && data.address) {
+        return this.parseNominatimAddress(data);
       }
-
-      if (!response.ok) {
-        throw new Error('Lỗi khi tra cứu địa chỉ từ toạ độ');
-      }
-
-      const data = await response.json();
-      // Nominatim trả HTTP 200 kèm body {"error": "Unable to geocode"} cho toạ độ không tra được
-      if (data.error) {
-        throw new Error(data.error);
-      }
-      const addr = data.address || {};
-
-      // Parse components according to Vietnam structure
-      const houseNumber = addr.house_number || '';
-      const road = addr.road || addr.street || addr.suburb_district || '';
-      const ward = addr.suburb || addr.quarter || addr.neighbourhood || addr.village || '';
-      const district = addr.city_district || addr.district || addr.county || '';
-      const city = addr.city || addr.state || addr.province || 'Hà Nội';
-      const country = addr.country || 'Việt Nam';
-
-      let streetPart = [houseNumber, road].filter(Boolean).join(' ');
-      if (!streetPart) streetPart = ward || 'Vị trí hiện tại';
-
-      const wardLower = ward.toLowerCase();
-      let wardPart = wardLower.startsWith('phường') || wardLower.startsWith('p.') ? ward : (ward ? `P. ${ward}` : '');
-      // So sánh không phân biệt hoa/thường: Nominatim trả "Thành phố Thủ Đức" (p thường)
-      const cityLower = city.toLowerCase();
-      let cityPart = cityLower.includes('thành phố') || cityLower.includes('tỉnh') ? city : `Thành Phố ${city}`;
-
-      // Typical Timemark single/multi line format
-      const line1 = [streetPart, cityPart, wardPart].filter(Boolean).join(', ');
-      const line2 = district ? `${district}, ${city}` : cityPart;
-
-      return {
-        line1: line1 || data.display_name,
-        line2: line2 || cityPart,
-        street: streetPart,
-        ward: wardPart || ward,
-        district: district,
-        city: cityPart,
-        country: country,
-        fullAddress: data.display_name,
-        raw: addr
-      };
+      throw new Error(data && data.error ? data.error : 'Nominatim không có dữ liệu địa chỉ');
     } catch (e) {
-      console.warn('Reverse geocoding error:', e);
-      // Fallback trung tính: chỉ hiển thị toạ độ, KHÔNG bịa tên thành phố
-      return {
-        line1: `Vị trí toạ độ (${lat.toFixed(4)}, ${lon.toFixed(4)})`,
-        line2: '',
-        street: 'Toạ độ GPS',
-        ward: '',
-        district: '',
-        city: '',
-        country: 'Việt Nam',
-        fullAddress: `Toạ độ: ${lat}, ${lon}`
-      };
+      console.warn('Nominatim reverse thất bại, chuyển sang Photon:', e && e.message);
     }
-  },
 
-  // Day-of-week & month name lookup tables
-  daysOfWeekVi: ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'],
-  daysOfWeekEn: ['Sun', 'Mon', 'Tues', 'Wed', 'Thur', 'Fri', 'Sat'],
-  monthsEn: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
-
-  /**
-   * Format date into various presets
-   */
-  formatDate(date, preset = 'vietnamese') {
-    const d = date instanceof Date ? date : new Date();
-    const day = d.getDate().toString().padStart(2, '0');
-    const dayUnpadded = d.getDate().toString();
-    const month = (d.getMonth() + 1).toString();
-    const monthPadded = (d.getMonth() + 1).toString().padStart(2, '0');
-    const monthEn = this.monthsEn[d.getMonth()];
-    const year = d.getFullYear();
-
-    switch (preset) {
-      case 'eng':
-        // e.g. "11 Aug 2026" (Chuẩn 2 ảnh mới)
-        return `${dayUnpadded} ${monthEn} ${year}`;
-      case 'vietnamese':
-        // e.g. "07 Tháng 8, 2026" or "11 Tháng 8, 2026"
-        return `${day} Tháng ${month}, ${year}`;
-      case 'slash':
-        // e.g. "08/07/2026"
-        return `${day}/${monthPadded}/${year}`;
-      case 'cjk':
-        // e.g. "2026年5月19日"
-        return `${year}年${month}月${day}日`;
-      case 'iso':
-        // e.g. "2026-08-11"
-        return `${year}-${monthPadded}-${day}`;
-      default:
-        return `${day} Tháng ${month}, ${year}`;
+    try {
+      const url = `https://photon.komoot.io/reverse?lat=${lat}&lon=${lon}&lang=default`;
+      const data = await this.fetchJson(url);
+      const f = data && data.features && data.features[0];
+      if (f) return this.parsePhotonFeature(f);
+      throw new Error('Photon không có kết quả');
+    } catch (e) {
+      console.warn('Photon reverse thất bại:', e && e.message);
     }
+
+    return {
+      latitude: lat,
+      longitude: lon,
+      displayName: `Vị trí toạ độ (${lat.toFixed(4)}, ${lon.toFixed(4)})`,
+      line1: `Vị trí toạ độ (${lat.toFixed(4)}, ${lon.toFixed(4)})`,
+      line2: '',
+      street: 'Toạ độ GPS',
+      ward: '',
+      district: '',
+      city: '',
+      country: 'Việt Nam',
+      fullAddress: `Toạ độ: ${lat}, ${lon}`,
+      provider: 'none'
+    };
   },
 
   /**
-   * Forward geocode: gõ địa chỉ -> tra toạ độ GPS + địa chỉ chuẩn hoá (Nominatim /search)
+   * Forward geocode: gõ địa chỉ -> tra toạ độ GPS + địa chỉ chuẩn hoá.
+   * Thử Nominatim trước, tự chuyển sang Photon nếu bị chặn/lỗi mạng.
    * @param {string} query - địa chỉ tự do, ví dụ "167 Nguyễn Ngọc Vũ, Cầu Giấy, Hà Nội"
    * @returns {Promise<Array<{latitude, longitude, displayName, line1, street, ward, district, city, country}>>}
    */
   async forwardGeocode(query) {
-    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&addressdetails=1&limit=5&accept-language=vi`;
+    const valid = (arr) => arr.filter(r => Number.isFinite(r.latitude) && Number.isFinite(r.longitude));
+    const errors = [];
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
-    let response;
     try {
-      response = await fetch(url, {
-        headers: { 'Accept': 'application/json' },
-        signal: controller.signal
-      });
-    } finally {
-      clearTimeout(timeoutId);
+      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&addressdetails=1&limit=5&accept-language=vi`;
+      const data = await this.fetchJson(url);
+      if (Array.isArray(data) && data.length) {
+        const out = valid(data.map(item => this.parseNominatimAddress(item)));
+        if (out.length) return out;
+      }
+    } catch (e) {
+      errors.push('Nominatim: ' + (e && e.message));
+      console.warn('Nominatim search thất bại, chuyển sang Photon:', e && e.message);
     }
 
-    if (!response.ok) {
-      throw new Error('Máy chủ tra cứu địa chỉ trả lỗi ' + response.status);
+    try {
+      const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=5&lang=default`;
+      const data = await this.fetchJson(url);
+      const feats = (data && data.features) || [];
+      if (feats.length) {
+        const out = valid(feats.map(f => this.parsePhotonFeature(f)));
+        if (out.length) return out;
+      }
+    } catch (e) {
+      errors.push('Photon: ' + (e && e.message));
+      console.warn('Photon search thất bại:', e && e.message);
     }
 
-    const data = await response.json();
-    if (!Array.isArray(data)) return [];
-
-    return data.map((item) => {
-      const addr = item.address || {};
-      const houseNumber = addr.house_number || '';
-      const road = addr.road || addr.street || '';
-      const ward = addr.suburb || addr.quarter || addr.neighbourhood || addr.village || '';
-      const district = addr.city_district || addr.district || addr.county || '';
-      const city = addr.city || addr.state || addr.province || '';
-      const country = addr.country || 'Việt Nam';
-
-      let streetPart = [houseNumber, road].filter(Boolean).join(' ');
-      if (!streetPart) streetPart = item.name || ward || district || city;
-
-      const wardLower = (ward || '').toLowerCase();
-      const wardPart = ward ? (wardLower.startsWith('phường') || wardLower.startsWith('p.') ? ward : `P. ${ward}`) : '';
-      const cityLower = (city || '').toLowerCase();
-      const cityPart = city ? (cityLower.includes('thành phố') || cityLower.includes('tỉnh') ? city : `Thành Phố ${city}`) : '';
-
-      return {
-        latitude: parseFloat(item.lat),
-        longitude: parseFloat(item.lon),
-        displayName: item.display_name || '',
-        line1: [streetPart, wardPart].filter(Boolean).join(', '),
-        street: streetPart,
-        ward: wardPart,
-        district: district,
-        city: cityPart,
-        country: country
-      };
-    }).filter(r => Number.isFinite(r.latitude) && Number.isFinite(r.longitude));
+    if (errors.length) {
+      throw new Error('Không kết nối được dịch vụ tra cứu địa chỉ (' + errors.join(' | ') + ')');
+    }
+    return [];
   },
 
   /**
