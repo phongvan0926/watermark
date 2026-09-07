@@ -25,9 +25,9 @@ c:\Users\Admin\Desktop\Water Mark\
 │   ├── geocoding.js            # Geolocation API, tra địa chỉ NGƯỢC + XUÔI với 2 nhà cung cấp dự phòng (Nominatim -> Photon), sinh mã xác thực, addMinutesToTime
 │   ├── watermark-engine.js     # Lõi vẽ Canvas 2D, co giãn tỷ lệ động, 12 hàm vẽ mẫu, preloadFonts, anchorBlock 4 góc, logo 2 tông màu, mã xoay -90°
 │   ├── camera.js               # Camera trực tiếp (MediaDevices), lật camera, live overlay loop, chống race bằng token thế hệ
-│   └── app.js                  # State Controller, two-way binding, biến thể per-image cho loạt ảnh, tải ZIP, tìm GPS
+│   └── app.js                  # State Controller, two-way binding, userEdited/applyPreset (giữ dữ liệu khi đổi mẫu), biến thể per-image, tải ZIP, tìm GPS
 ├── tests/                      # Bộ test Playwright (package.json RIÊNG — app chính vẫn Zero-Dependency)
-│   ├── ui-test.js              # 59 kiểm thử: reachability đa viewport, 12 mẫu × 4 vị trí, accordion, geocode + fallback nhà cung cấp, camera giả lập
+│   ├── ui-test.js              # 67 kiểm thử: reachability, 12 mẫu × 4 vị trí, accordion, geocode + fallback, giữ dữ liệu khi đổi mẫu, camera
 │   ├── batch-test.js           # 11 kiểm thử: mỗi ảnh mã duy nhất + giờ cộng dồn 0–2 phút
 │   └── vert-code-test.js       #  8 kiểm thử: định dạng mã xác thực trên 20.000 mẫu sinh ra
 ├── assets/                     # Ảnh chụp màn hình dùng trong README
@@ -128,7 +128,7 @@ Từ v1.4.0, mẫu `timemark-standard` dùng **hệ đơn vị scale thống nh�
      ```bash
      node tests/ui-test.js && node tests/batch-test.js && node tests/vert-code-test.js
      ```
-     Hiện trạng chuẩn: **78/78 PASS** (59 + 11 + 8). Nếu thêm tính năng, phải bổ sung test tương ứng.
+     Hiện trạng chuẩn: **86/86 PASS** (67 + 11 + 8). Nếu thêm tính năng, phải bổ sung test tương ứng.
 5. **QUY TRÌNH BẮT BUỘC SAU MỖI LẦN HOÀN THÀNH CÔNG VIỆC** (yêu cầu trực tiếp của chủ dự án):
    - **a. Cập nhật tài liệu:** thêm mô tả tính năng vào `README.md` (góc nhìn người dùng cuối) và thêm mục vào **Nhật Ký Thay Đổi (Changelog)** cuối file `AGENTS.md` (góc nhìn kỹ thuật) — kèm cập nhật các mục 2/3/4 nếu cấu trúc, công thức hay danh sách mẫu thay đổi.
    - **b. Commit** với message tiếng Việt mô tả rõ thay đổi.
@@ -195,3 +195,11 @@ Từ v1.4.0, mẫu `timemark-standard` dùng **hệ đơn vị scale thống nh�
   - **Thông báo lỗi thân thiện:** thay vì hiện thẳng `Failed to fetch`, app phân biệt mất mạng (`navigator.onLine`) và bị chặn máy chủ, rồi hướng dẫn cụ thể (đổi DNS 8.8.8.8/1.1.1.1, tắt tiện ích chặn quảng cáo, hoặc nhập tay).
   - **Kiểm chứng thực tế trên chính mạng đang bị chặn:** forward trả 5 kết quả trong 1.185 giây, định dạng đúng ("143 Đường Nguyễn Ngọc Vũ, P. Yên Hoà" / "Thành Phố Hà Nội"); reverse cũng chạy qua Photon.
   - **4 test hồi quy mới trong `ui-test.js`** (55 → 59): giả lập Nominatim bị chặn → phải tự dùng Photon và điền đúng địa chỉ + toạ độ; cả 2 nguồn hỏng → phải hiện thông báo tiếng Việt dễ hiểu, KHÔNG lộ chuỗi "Failed to fetch". Tổng bộ test: **78/78 PASS**.
+- **v1.6.3 (Sửa Lỗi Mất Địa Chỉ/Toạ Độ Khi Đổi Mẫu Watermark):**
+  - **Nguyên nhân gốc:** trình xử lý chọn mẫu (`--- 6. Template Selection Handling ---`) gán preset minh hoạ **vô điều kiện** (`state.address1 = 'Tao Dan Park, Hồ Chí Minh'` …), nên mọi nội dung người dùng đã nhập — kể cả địa chỉ & toạ độ vừa lấy từ "Tìm GPS" — bị ghi đè mỗi lần đổi mẫu.
+  - **Cơ chế mới `userEdited` + `applyPreset()`:** app ghi nhớ những trường người dùng đã tự nhập hoặc được điền tự động; khi đổi mẫu, preset **CHỈ điền vào các trường chưa bị đụng tới**. Nhờ vậy dữ liệu thật được giữ nguyên, còn các trường trống vẫn nhận nội dung minh hoạ như trước.
+  - **44 điểm đánh dấu dữ liệu người dùng:** toàn bộ 32 ô nhập (bulk), bộ chọn giờ/thứ, nút "Lấy Giờ Hiện Tại", nút "Toạ độ mẫu", 4 nút vị trí, preset thương hiệu logo, **Tìm GPS theo địa chỉ** (`applyGeoResult`), **GPS Tự Động**, **EXIF ngày giờ + toạ độ**, và nút GPS trong camera.
+  - **Bảng preset tách riêng (`TEMPLATE_PRESETS`):** thay chuỗi `if/else if` 110 dòng bằng một object khai báo — dễ đọc, dễ thêm mẫu mới, và là nguồn duy nhất cho `applyPreset()`.
+  - **Đường thoát rõ ràng:** nút "Khôi phục mẫu ban đầu" và 2 nút "Mẫu 4:3/3:4" gọi `clearEdited()` để xoá đánh dấu, cho phép preset điền lại từ đầu.
+  - **Chỉ báo trực quan:** dòng xanh `🔒 Đang giữ N nội dung bạn đã nhập (không bị mất khi đổi mẫu)` hiện ở đầu khối "Chỉnh Sửa Nội Dung", tự ẩn khi không còn dữ liệu người dùng.
+  - **8 test hồi quy mới trong `ui-test.js`** (59 → 67): lấy địa chỉ qua Tìm GPS rồi **đổi qua 6 mẫu liên tiếp** → địa chỉ/toạ độ/tỉnh-thành phải giữ nguyên; trường chưa nhập vẫn nhận preset; nút Khôi phục xoá đánh dấu và preset điền lại được. Tổng bộ test: **86/86 PASS**.

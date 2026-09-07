@@ -1,9 +1,9 @@
 # 📸 Timemark GPS Pro — Đóng Dấu Toạ Độ & Thời Gian Lên Ảnh
 
 [![Dùng ngay trên web](https://img.shields.io/badge/%F0%9F%9A%80_D%C3%B9ng_ngay-GitHub_Pages-f9c13a?style=for-the-badge)](https://phongvan0926.github.io/watermark/)
-[![Tests](https://img.shields.io/badge/Tests-78%2F78_PASS-2ea44f?style=for-the-badge)](#-kiểm-thử)
+[![Tests](https://img.shields.io/badge/Tests-86%2F86_PASS-2ea44f?style=for-the-badge)](#-kiểm-thử)
 [![Zero Dependency](https://img.shields.io/badge/Zero--Dependency-Vanilla_JS-blue?style=for-the-badge)](#-kiến-trúc)
-[![Version](https://img.shields.io/badge/version-1.6.2-f59e0b?style=for-the-badge)](AGENTS.md#6-nhật-ký-thay-đổi-changelog)
+[![Version](https://img.shields.io/badge/version-1.6.3-f59e0b?style=for-the-badge)](AGENTS.md#6-nhật-ký-thay-đổi-changelog)
 
 Công cụ web đóng dấu **ngày giờ + địa chỉ + toạ độ GPS + mã xác thực** lên ảnh, tái tạo chuẩn xác phong cách app **Timemark: Photo Proof for Work** và GPS Map Camera — chạy 100% trên trình duyệt, không cần cài đặt, ảnh không bao giờ rời khỏi máy bạn.
 
@@ -19,6 +19,7 @@ Công cụ web đóng dấu **ngày giờ + địa chỉ + toạ độ GPS + mã
 - **Đọc EXIF tự động**: tải ảnh lên là tự lấy ngày chụp gốc + toạ độ GPS trong ảnh (nếu có) và dịch ngược thành địa chỉ tiếng Việt.
 - **Chụp trực tiếp từ camera** với watermark xem trước theo thời gian thực.
 - **Xử lý hàng loạt thông minh**: kéo thả nhiều ảnh, tải về cả gói ZIP — **mỗi ảnh tự nhận một mã xác thực riêng duy nhất** và **giờ lệch nhẹ** (ảnh sau cộng dồn ngẫu nhiên 0/1/2 phút), mọi thông tin khác giữ nguyên. Bật/tắt và tạo lại toàn bộ chỉ bằng một nút.
+- **Không bao giờ mất dữ liệu**: địa chỉ, toạ độ, giờ bạn đã nhập (hoặc lấy từ GPS/EXIF) được giữ nguyên khi đổi sang mẫu watermark khác — chỉ những ô còn trống mới nhận nội dung minh hoạ.
 - **Tuỳ biến toàn bộ**: mọi dòng chữ, 4 vị trí góc, cỡ chữ, lề, màu sắc, bóng đổ, độ trong suốt; hỗ trợ 4 tỷ lệ khung 4:3 / 3:4 / 16:9 / 9:16 với độ chính xác pixel trên mọi độ phân giải (720p → 12MP).
 - **Giao diện gọn gàng**: thanh điều hướng nhanh dính trên đầu, các khối thu gọn/mở rộng được, cuộn tới mọi nút trên cả màn hình laptop thấp lẫn điện thoại.
 - **Riêng tư tuyệt đối**: mọi xử lý ảnh diễn ra trong trình duyệt (Canvas API) — không upload ảnh lên bất kỳ máy chủ nào.
@@ -51,7 +52,7 @@ Zero-Dependency thuần HTML5 / CSS / JavaScript ES6+ — không framework, khô
 │   ├── camera.js               # Camera trực tiếp + overlay watermark realtime
 │   └── app.js                  # State controller, đồng bộ 2 chiều UI ⟷ state, biến thể batch
 ├── tests/
-│   ├── ui-test.js              # 59 kiểm thử UI (reachability đa màn hình, geocode + fallback, camera)
+│   ├── ui-test.js              # 67 kiểm thử UI (reachability, geocode + fallback, giữ dữ liệu, camera)
 │   ├── batch-test.js           # 11 kiểm thử loạt ảnh (mã riêng + giờ cộng dồn)
 │   └── vert-code-test.js       #  8 kiểm thử định dạng mã xác thực (20.000 mã)
 ├── .github/workflows/          # Tự động deploy GitHub Pages mỗi lần push
@@ -64,12 +65,12 @@ Zero-Dependency thuần HTML5 / CSS / JavaScript ES6+ — không framework, khô
 cd tests
 npm install
 npx playwright install chromium
-node ui-test.js         # 59/59 — UI, reachability, geocode + dự phòng nhà cung cấp, camera
+node ui-test.js         # 67/67 — UI, reachability, geocode + dự phòng, giữ dữ liệu khi đổi mẫu
 node batch-test.js      # 11/11 — mỗi ảnh mã & giờ riêng khi tải hàng loạt
 node vert-code-test.js  #  8/8  — định dạng mã xác thực
 ```
 
-Bộ test kiểm tra: mọi nút bấm được trên 4 kích thước màn hình, 12 mẫu × 4 vị trí không lỗi, accordion/điều hướng, trọn luồng tìm GPS theo địa chỉ (mock API), chụp camera giả lập đầu-cuối, loạt tải hàng loạt (mỗi ảnh mã duy nhất + giờ cộng dồn 0–2′), và cơ chế tự chuyển nhà cung cấp geocoding khi nguồn chính bị chặn.
+Bộ test kiểm tra: mọi nút bấm được trên 4 kích thước màn hình, 12 mẫu × 4 vị trí không lỗi, accordion/điều hướng, trọn luồng tìm GPS theo địa chỉ (mock API), chụp camera giả lập đầu-cuối, loạt tải hàng loạt (mỗi ảnh mã duy nhất + giờ cộng dồn 0–2′), cơ chế tự chuyển nhà cung cấp geocoding khi nguồn chính bị chặn, và việc giữ nguyên dữ liệu người dùng khi đổi mẫu.
 
 ## 📖 Tài liệu kỹ thuật
 

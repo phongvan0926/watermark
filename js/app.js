@@ -212,6 +212,43 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initialize Camera Controller
   CameraController.init(state);
 
+  // --- Bảo vệ dữ liệu người dùng khỏi bị preset của mẫu ghi đè ---
+  // Mọi trường mà người dùng tự gõ, hoặc được điền từ "Tìm GPS"/EXIF/GPS Tự Động,
+  // đều được đánh dấu ở đây. Khi đổi mẫu watermark, preset minh hoạ sẽ BỎ QUA
+  // các trường này, nên địa chỉ & toạ độ đã lấy được không bao giờ bị mất.
+  const userEdited = Object.create(null);
+
+  function markEdited() {
+    for (let i = 0; i < arguments.length; i++) userEdited[arguments[i]] = true;
+    updateUserDataNote();
+  }
+
+  function applyPreset(preset) {
+    if (!preset) return;
+    Object.keys(preset).forEach((key) => {
+      if (!userEdited[key]) state[key] = preset[key];
+    });
+  }
+
+  // Xoá toàn bộ đánh dấu -> preset được phép điền lại (dùng cho nút Khôi phục / nạp ảnh mẫu)
+  function clearEdited() {
+    Object.keys(userEdited).forEach((k) => { delete userEdited[k]; });
+    updateUserDataNote();
+  }
+
+  // Hiện chỉ báo cho người dùng biết nội dung của họ đang được giữ khi đổi mẫu
+  function updateUserDataNote() {
+    const note = document.getElementById('user-data-note');
+    if (!note) return;
+    const n = Object.keys(userEdited).length;
+    if (n > 0) {
+      note.textContent = `🔒 Đang giữ ${n} nội dung bạn đã nhập (không bị mất khi đổi mẫu). Bấm "Khôi phục mẫu ban đầu" để xoá.`;
+      note.classList.remove('hidden');
+    } else {
+      note.classList.add('hidden');
+    }
+  }
+
   // --- Biến thể per-image cho tải hàng loạt ---
   // Ảnh trong batch đang được xem (khớp currentImage); null nếu đang xem ảnh mẫu/khác
   function activeBatchItem() {
@@ -376,8 +413,8 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // --- 5. Event Listeners for All Editable Fields ---
-  inputTime.addEventListener('input', (e) => { state.time = e.target.value; updateCanvas(); });
-  pickerTime.addEventListener('change', (e) => { state.time = e.target.value; inputTime.value = state.time; updateCanvas(); });
+  inputTime.addEventListener('input', (e) => { state.time = e.target.value; markEdited('time'); updateCanvas(); });
+  pickerTime.addEventListener('change', (e) => { state.time = e.target.value; inputTime.value = state.time; markEdited('time'); updateCanvas(); });
 
   btnNowTime.addEventListener('click', () => {
     const now = new Date();
@@ -388,11 +425,12 @@ document.addEventListener('DOMContentLoaded', () => {
     state.date = GeoService.formatDate(now, fmt);
     state.dayOfWeek = fmt === 'eng' ? GeoService.getDayOfWeekEn(now) : GeoService.getDayOfWeekVi(now);
     state.customDateTime = `${GeoService.formatDate(now, 'slash')} ${state.time}`;
+    markEdited('time', 'date', 'dayOfWeek', 'customDateTime');
     syncInputsFromState();
     updateCanvas();
   });
 
-  inputDate.addEventListener('input', (e) => { state.date = e.target.value; updateCanvas(); });
+  inputDate.addEventListener('input', (e) => { state.date = e.target.value; markEdited('date'); updateCanvas(); });
 
   // Date format chips
   document.querySelectorAll('.chip[data-date-fmt]').forEach(chip => {
@@ -413,72 +451,74 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  inputDay.addEventListener('input', (e) => { state.dayOfWeek = e.target.value; updateCanvas(); });
+  inputDay.addEventListener('input', (e) => { state.dayOfWeek = e.target.value; markEdited('dayOfWeek'); updateCanvas(); });
   selectDay.addEventListener('change', (e) => {
     if (e.target.value) {
       state.dayOfWeek = e.target.value;
       inputDay.value = state.dayOfWeek;
+      markEdited('dayOfWeek');
       updateCanvas();
     }
   });
 
-  inputAddr1.addEventListener('input', (e) => { state.address1 = e.target.value; updateCanvas(); });
-  inputAddr2.addEventListener('input', (e) => { state.address2 = e.target.value; updateCanvas(); });
+  inputAddr1.addEventListener('input', (e) => { state.address1 = e.target.value; markEdited('address1'); updateCanvas(); });
+  inputAddr2.addEventListener('input', (e) => { state.address2 = e.target.value; markEdited('address2'); updateCanvas(); });
 
   btnSetSampleCoords.addEventListener('click', () => {
     state.address2 = 'Tọa độ: 20.970515°N, 105.816296°E ±16ft';
+    markEdited('address2');
     inputAddr2.value = state.address2;
     updateCanvas();
   });
 
-  inputGpsLine3.addEventListener('input', (e) => { state.gpsLine3 = e.target.value; updateCanvas(); });
-  inputGpsLine4.addEventListener('input', (e) => { state.gpsLine4 = e.target.value; updateCanvas(); });
-  inputGpsLine5.addEventListener('input', (e) => { state.gpsLine5 = e.target.value; updateCanvas(); });
+  inputGpsLine3.addEventListener('input', (e) => { state.gpsLine3 = e.target.value; markEdited('gpsLine3'); updateCanvas(); });
+  inputGpsLine4.addEventListener('input', (e) => { state.gpsLine4 = e.target.value; markEdited('gpsLine4'); updateCanvas(); });
+  inputGpsLine5.addEventListener('input', (e) => { state.gpsLine5 = e.target.value; markEdited('gpsLine5'); updateCanvas(); });
 
   // Custom Template listeners
-  if (inputCustomTitle) inputCustomTitle.addEventListener('input', (e) => { state.customTitle = e.target.value; updateCanvas(); });
-  if (inputCustomDateTime) inputCustomDateTime.addEventListener('input', (e) => { state.customDateTime = e.target.value; updateCanvas(); });
-  if (inputCustomLocation) inputCustomLocation.addEventListener('input', (e) => { state.customLocation = e.target.value; updateCanvas(); });
-  if (inputCustomGps) inputCustomGps.addEventListener('input', (e) => { state.customGps = e.target.value; updateCanvas(); });
+  if (inputCustomTitle) inputCustomTitle.addEventListener('input', (e) => { state.customTitle = e.target.value; markEdited('customTitle'); updateCanvas(); });
+  if (inputCustomDateTime) inputCustomDateTime.addEventListener('input', (e) => { state.customDateTime = e.target.value; markEdited('customDateTime'); updateCanvas(); });
+  if (inputCustomLocation) inputCustomLocation.addEventListener('input', (e) => { state.customLocation = e.target.value; markEdited('customLocation'); updateCanvas(); });
+  if (inputCustomGps) inputCustomGps.addEventListener('input', (e) => { state.customGps = e.target.value; markEdited('customGps'); updateCanvas(); });
 
   // Attendance listener
-  if (inputAttendBadge) inputAttendBadge.addEventListener('input', (e) => { state.attendanceBadge = e.target.value; updateCanvas(); });
+  if (inputAttendBadge) inputAttendBadge.addEventListener('input', (e) => { state.attendanceBadge = e.target.value; markEdited('attendanceBadge'); updateCanvas(); });
 
   // Service listeners
-  if (inputServTitle) inputServTitle.addEventListener('input', (e) => { state.servTitle = e.target.value; updateCanvas(); });
-  if (inputServDetail) inputServDetail.addEventListener('input', (e) => { state.servDetail = e.target.value; updateCanvas(); });
-  if (inputServPhone) inputServPhone.addEventListener('input', (e) => { state.servPhone = e.target.value; updateCanvas(); });
+  if (inputServTitle) inputServTitle.addEventListener('input', (e) => { state.servTitle = e.target.value; markEdited('servTitle'); updateCanvas(); });
+  if (inputServDetail) inputServDetail.addEventListener('input', (e) => { state.servDetail = e.target.value; markEdited('servDetail'); updateCanvas(); });
+  if (inputServPhone) inputServPhone.addEventListener('input', (e) => { state.servPhone = e.target.value; markEdited('servPhone'); updateCanvas(); });
 
   // Security listeners
-  if (inputSecTitle) inputSecTitle.addEventListener('input', (e) => { state.secTitle = e.target.value; updateCanvas(); });
-  if (inputSecAddr) inputSecAddr.addEventListener('input', (e) => { state.secAddr = e.target.value; updateCanvas(); });
+  if (inputSecTitle) inputSecTitle.addEventListener('input', (e) => { state.secTitle = e.target.value; markEdited('secTitle'); updateCanvas(); });
+  if (inputSecAddr) inputSecAddr.addEventListener('input', (e) => { state.secAddr = e.target.value; markEdited('secAddr'); updateCanvas(); });
 
   // Technical listeners
-  if (inputTechHeader) inputTechHeader.addEventListener('input', (e) => { state.techHeader = e.target.value; updateCanvas(); });
-  if (inputTechLine1) inputTechLine1.addEventListener('input', (e) => { state.techLine1 = e.target.value; updateCanvas(); });
+  if (inputTechHeader) inputTechHeader.addEventListener('input', (e) => { state.techHeader = e.target.value; markEdited('techHeader'); updateCanvas(); });
+  if (inputTechLine1) inputTechLine1.addEventListener('input', (e) => { state.techLine1 = e.target.value; markEdited('techLine1'); updateCanvas(); });
 
   // Worklog listeners
-  if (inputLogHeader) inputLogHeader.addEventListener('input', (e) => { state.logHeader = e.target.value; updateCanvas(); });
-  if (inputLogContent) inputLogContent.addEventListener('input', (e) => { state.logContent = e.target.value; updateCanvas(); });
-  if (inputLogPlace) inputLogPlace.addEventListener('input', (e) => { state.logPlace = e.target.value; updateCanvas(); });
+  if (inputLogHeader) inputLogHeader.addEventListener('input', (e) => { state.logHeader = e.target.value; markEdited('logHeader'); updateCanvas(); });
+  if (inputLogContent) inputLogContent.addEventListener('input', (e) => { state.logContent = e.target.value; markEdited('logContent'); updateCanvas(); });
+  if (inputLogPlace) inputLogPlace.addEventListener('input', (e) => { state.logPlace = e.target.value; markEdited('logPlace'); updateCanvas(); });
 
   // Weather listeners
-  if (inputWeathCompass) inputWeathCompass.addEventListener('input', (e) => { state.weathCompass = e.target.value; updateCanvas(); });
-  if (inputWeathTemp) inputWeathTemp.addEventListener('input', (e) => { state.weathTemp = e.target.value; updateCanvas(); });
-  if (inputWeathAlt) inputWeathAlt.addEventListener('input', (e) => { state.weathAlt = e.target.value; updateCanvas(); });
+  if (inputWeathCompass) inputWeathCompass.addEventListener('input', (e) => { state.weathCompass = e.target.value; markEdited('weathCompass'); updateCanvas(); });
+  if (inputWeathTemp) inputWeathTemp.addEventListener('input', (e) => { state.weathTemp = e.target.value; markEdited('weathTemp'); updateCanvas(); });
+  if (inputWeathAlt) inputWeathAlt.addEventListener('input', (e) => { state.weathAlt = e.target.value; markEdited('weathAlt'); updateCanvas(); });
 
   // Work Report listeners
-  if (inputWorkProject) inputWorkProject.addEventListener('input', (e) => { state.workProject = e.target.value; updateCanvas(); });
-  if (inputWorkPerson) inputWorkPerson.addEventListener('input', (e) => { state.workPerson = e.target.value; updateCanvas(); });
-  if (inputWorkNote) inputWorkNote.addEventListener('input', (e) => { state.workNote = e.target.value; updateCanvas(); });
+  if (inputWorkProject) inputWorkProject.addEventListener('input', (e) => { state.workProject = e.target.value; markEdited('workProject'); updateCanvas(); });
+  if (inputWorkPerson) inputWorkPerson.addEventListener('input', (e) => { state.workPerson = e.target.value; markEdited('workPerson'); updateCanvas(); });
+  if (inputWorkNote) inputWorkNote.addEventListener('input', (e) => { state.workNote = e.target.value; markEdited('workNote'); updateCanvas(); });
 
   chkShowLogo.addEventListener('change', (e) => {
     state.showLogo = e.target.checked;
     boxLogoControls.classList.toggle('hidden', !state.showLogo);
     updateCanvas();
   });
-  inputLogoTitle.addEventListener('input', (e) => { state.logoTitle = e.target.value; updateCanvas(); });
-  inputLogoSubtitle.addEventListener('input', (e) => { state.logoSubtitle = e.target.value; updateCanvas(); });
+  inputLogoTitle.addEventListener('input', (e) => { state.logoTitle = e.target.value; markEdited('logoTitle'); updateCanvas(); });
+  inputLogoSubtitle.addEventListener('input', (e) => { state.logoSubtitle = e.target.value; markEdited('logoSubtitle'); updateCanvas(); });
 
   // Brand presets
   document.querySelectorAll('[data-preset-brand]').forEach(btn => {
@@ -498,6 +538,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       inputLogoTitle.value = state.logoTitle;
       inputLogoSubtitle.value = state.logoSubtitle;
+      markEdited('logoTitle', 'logoSubtitle');
       updateCanvas();
     });
   });
@@ -524,7 +565,7 @@ document.addEventListener('DOMContentLoaded', () => {
     else state.vertCode = cleaned;
     updateCanvas();
   });
-  inputVertSuffix.addEventListener('input', (e) => { state.vertSuffix = e.target.value; updateCanvas(); });
+  inputVertSuffix.addEventListener('input', (e) => { state.vertSuffix = e.target.value; markEdited('vertSuffix'); updateCanvas(); });
   btnGenCode.addEventListener('click', () => {
     const newCode = GeoService.generateSecurityCode(14);
     const item = activeBatchItem();
@@ -559,6 +600,7 @@ document.addEventListener('DOMContentLoaded', () => {
       document.querySelectorAll('.pos-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       state.position = btn.dataset.pos;
+      markEdited('position');
       updateCanvas();
     });
   });
@@ -602,6 +644,69 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // --- 6. Template Selection Handling ---
+  // Bảng nội dung mẫu minh hoạ cho từng template.
+  const TEMPLATE_PRESETS = {
+    'timemark-standard': {
+      position: 'bottom-left', time: '09:30', date: '30 Thg 1 2023', dayOfWeek: 'Thứ Hai',
+      address1: 'Tao Dan Park, Hồ Chí Minh', address2: '',
+      logoTitle: 'Timemark', logoSubtitle: '100% Chân thực'
+    },
+    'timemark-custom': {
+      position: 'bottom-left', customTitle: 'Tiêu đề của bạn', customDateTime: '30/01/2023 09:30',
+      customLocation: 'Tao Dan Park, Hồ Chí Minh', customGps: '10.774917°N, 106.692420°E',
+      logoTitle: 'Timemark', logoSubtitle: '100% Chân thực'
+    },
+    'timemark-attendance': {
+      position: 'bottom-left', attendanceBadge: 'Điểm danh', time: '23:40', date: '30/01/2022',
+      address1: 'Tao Dan Park, Hồ Chí Minh', address2: '',
+      logoTitle: 'Timemark', logoSubtitle: '100% Chân thực'
+    },
+    'timemark-service': {
+      position: 'bottom-left', servTitle: 'Tên dịch vụ', customDateTime: '30/01/2023 09:30',
+      servDetail: '👉: Chi tiết dịch vụ', servPhone: '0123456666',
+      logoTitle: 'Timemark', logoSubtitle: '100% Chân thực'
+    },
+    'timemark-security': {
+      position: 'bottom-left', secTitle: '🛡️ BẢO VỆ', time: '09:30', date: '30/01/2023',
+      secAddr: 'Tao Dan Park, Hồ Chí Minh',
+      logoTitle: 'Timemark', logoSubtitle: '100% Chân thực'
+    },
+    'timemark-technical': {
+      position: 'bottom-left', techHeader: 'HỒ SƠ KỸ THUẬT',
+      techLine1: 'Nghiệm thu: Thử kín nội bộ tầng 3', customDateTime: '30/01/2023 09:30',
+      logoTitle: 'Timemark', logoSubtitle: '100% Chân thực'
+    },
+    'timemark-completed': {
+      position: 'bottom-left', time: '09:30', date: '30/01/2023',
+      address1: 'Tao Dan Park, District 1, Ho Chi Minh City, Vietnam',
+      logoTitle: 'Timemark', logoSubtitle: '100% Chân thực'
+    },
+    'timemark-worklog': {
+      position: 'bottom-left', logHeader: 'Nhật ký công việc', logContent: 'Thử kín nội bộ tầng 3',
+      logPlace: 'Tầng 3 trục 1B', customDateTime: '30/01/2022 16:35',
+      logoTitle: 'Timemark', logoSubtitle: '100% Chân thực'
+    },
+    'timemark-weather-gps': {
+      position: 'bottom-left', customLocation: 'Tao Dan Park', customGps: '10.774917°N, 106.692420°E',
+      weathCompass: 'SE 125°', customDateTime: '30/01/2023 09:30', weathTemp: '☀️ 28°C',
+      logoTitle: 'Timemark', logoSubtitle: '100% Chân thực'
+    },
+    'timemark-gps': {
+      position: 'bottom-left', time: '10:13', date: '08/07/2026', dayOfWeek: 'Thứ Tư',
+      address1: 'Thành Phố Hà Nội, P. Hoàng Liệt',
+      address2: 'Tọa độ: 20.970515°N, 105.816296°E ±16ft',
+      logoTitle: 'Timemark', logoSubtitle: 'Máy ảnh'
+    },
+    'gps-multiline': {
+      position: 'top-right', date: '2026年5月19日', time: '10:44:40', address1: 'Ngõ 4 Phương Mai',
+      gpsLine3: 'Thành Phố Hà Nội', gpsLine4: 'P. Kim Liên', gpsLine5: 'Việt Nam'
+    },
+    'work-report': {
+      position: 'bottom-left', workProject: 'HỒ SƠ KỸ THUẬT',
+      workPerson: 'Nghiệm thu: Thử kín nội bộ tầng 3', workNote: 'Thời gian: 30/01/2023 09:30'
+    }
+  };
+
   document.querySelectorAll('.template-card').forEach(card => {
     card.addEventListener('click', () => {
       document.querySelectorAll('.template-card').forEach(c => c.classList.remove('active'));
@@ -609,114 +714,13 @@ document.addEventListener('DOMContentLoaded', () => {
       const tpl = card.dataset.template;
       state.template = tpl;
 
-      // Apply tailored presets based on template
-      if (tpl === 'timemark-standard') {
-        state.position = 'bottom-left';
-        state.time = '09:30';
-        state.date = '30 Thg 1 2023';
-        state.dayOfWeek = 'Thứ Hai';
-        state.address1 = 'Tao Dan Park, Hồ Chí Minh';
-        state.address2 = '';
-        state.logoTitle = 'Timemark';
-        state.logoSubtitle = '100% Chân thực';
-      } else if (tpl === 'timemark-custom') {
-        // Mẫu 3: Tùy Chỉnh (Tiêu đề của bạn)
-        state.position = 'bottom-left';
-        state.customTitle = 'Tiêu đề của bạn';
-        state.customDateTime = '30/01/2023 09:30';
-        state.customLocation = 'Tao Dan Park, Hồ Chí Minh';
-        state.customGps = '10.774917°N, 106.692420°E';
-        state.logoTitle = 'Timemark';
-        state.logoSubtitle = '100% Chân thực';
-      } else if (tpl === 'timemark-attendance') {
-        // Mẫu Điểm Danh
-        state.position = 'bottom-left';
-        state.attendanceBadge = 'Điểm danh';
-        state.time = '23:40';
-        state.date = '30/01/2022';
-        state.address1 = 'Tao Dan Park, Hồ Chí Minh';
-        state.address2 = '';
-        state.logoTitle = 'Timemark';
-        state.logoSubtitle = '100% Chân thực';
-      } else if (tpl === 'timemark-service') {
-        // Mẫu Dịch Vụ
-        state.position = 'bottom-left';
-        state.servTitle = 'Tên dịch vụ';
-        state.customDateTime = '30/01/2023 09:30';
-        state.servDetail = '👉: Chi tiết dịch vụ';
-        state.servPhone = '0123456666';
-        state.logoTitle = 'Timemark';
-        state.logoSubtitle = '100% Chân thực';
-      } else if (tpl === 'timemark-security') {
-        // Mẫu Bảo Vệ
-        state.position = 'bottom-left';
-        state.secTitle = '🛡️ BẢO VỆ';
-        state.time = '09:30';
-        state.date = '30/01/2023';
-        state.secAddr = 'Tao Dan Park, Hồ Chí Minh';
-        state.logoTitle = 'Timemark';
-        state.logoSubtitle = '100% Chân thực';
-      } else if (tpl === 'timemark-technical') {
-        // Mẫu Hồ Sơ Kỹ Thuật
-        state.position = 'bottom-left';
-        state.techHeader = 'HỒ SƠ KỸ THUẬT';
-        state.techLine1 = 'Nghiệm thu: Thử kín nội bộ tầng 3';
-        state.customDateTime = '30/01/2023 09:30';
-        state.logoTitle = 'Timemark';
-        state.logoSubtitle = '100% Chân thực';
-      } else if (tpl === 'timemark-completed') {
-        // Mẫu Đã Hoàn Thành
-        state.position = 'bottom-left';
-        state.time = '09:30';
-        state.date = '30/01/2023';
-        state.address1 = 'Tao Dan Park, District 1, Ho Chi Minh City, Vietnam';
-        state.logoTitle = 'Timemark';
-        state.logoSubtitle = '100% Chân thực';
-      } else if (tpl === 'timemark-worklog') {
-        // Mẫu Nhật Ký Công Việc
-        state.position = 'bottom-left';
-        state.logHeader = 'Nhật ký công việc';
-        state.logContent = 'Thử kín nội bộ tầng 3';
-        state.logPlace = 'Tầng 3 trục 1B';
-        state.customDateTime = '30/01/2022 16:35';
-        state.logoTitle = 'Timemark';
-        state.logoSubtitle = '100% Chân thực';
-      } else if (tpl === 'timemark-weather-gps') {
-        // Mẫu Toạ Độ & Thời Tiết
-        state.position = 'bottom-left';
-        state.customLocation = 'Tao Dan Park';
-        state.customGps = '10.774917°N, 106.692420°E';
-        state.weathCompass = 'SE 125°';
-        state.customDateTime = '30/01/2023 09:30';
-        state.weathTemp = '☀️ 28°C';
-        state.logoTitle = 'Timemark';
-        state.logoSubtitle = '100% Chân thực';
-      } else if (tpl === 'timemark-gps') {
-        state.position = 'bottom-left';
-        state.time = '10:13';
-        state.date = '08/07/2026';
-        state.dayOfWeek = 'Thứ Tư';
-        state.address1 = 'Thành Phố Hà Nội, P. Hoàng Liệt';
-        state.address2 = 'Tọa độ: 20.970515°N, 105.816296°E ±16ft';
-        state.logoTitle = 'Timemark';
-        state.logoSubtitle = 'Máy ảnh';
-      } else if (tpl === 'gps-multiline') {
-        state.position = 'top-right';
-        state.date = '2026年5月19日';
-        state.time = '10:44:40';
-        state.address1 = 'Ngõ 4 Phương Mai';
-        state.gpsLine3 = 'Thành Phố Hà Nội';
-        state.gpsLine4 = 'P. Kim Liên';
-        state.gpsLine5 = 'Việt Nam';
-      } else if (tpl === 'work-report') {
-        state.position = 'bottom-left';
-        state.workProject = 'HỒ SƠ KỸ THUẬT';
-        state.workPerson = 'Nghiệm thu: Thử kín nội bộ tầng 3';
-        state.workNote = 'Thời gian: 30/01/2023 09:30';
-      }
+      // CHỈ điền nội dung minh hoạ vào những trường người dùng CHƯA tự nhập —
+      // nhờ vậy địa chỉ & toạ độ lấy từ "Tìm GPS"/EXIF/GPS Tự Động không bị mất khi đổi mẫu.
+      applyPreset(TEMPLATE_PRESETS[tpl]);
 
       syncInputsFromState();
       updateCanvas();
+      updateUserDataNote();
     });
   });
 
@@ -734,6 +738,7 @@ document.addEventListener('DOMContentLoaded', () => {
       state.gpsLine3 = addrInfo.city;
       state.gpsLine4 = addrInfo.ward;
       state.gpsLine5 = addrInfo.country;
+      markEdited('address1', 'address2', 'gpsLine3', 'gpsLine4', 'gpsLine5');
 
       syncInputsFromState();
       updateCanvas();
@@ -813,6 +818,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.time = GeoService.formatTime(exif.dateTime);
         state.date = GeoService.formatDate(exif.dateTime, 'vietnamese');
         state.dayOfWeek = GeoService.getDayOfWeekVi(exif.dateTime);
+        markEdited('time', 'date', 'dayOfWeek');
       }
 
       if (exif.latitude != null && exif.longitude != null) {
@@ -820,6 +826,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (myToken !== handleFilesToken) return;
         state.address1 = addr.line1;
         state.address2 = GeoService.formatCoordsString(exif.latitude, exif.longitude);
+        markEdited('address1', 'address2');
       }
 
       selectBatchImage(0);
@@ -1128,6 +1135,7 @@ document.addEventListener('DOMContentLoaded', () => {
       state.scale = 100;
       state.margin = 4;
       state.barColor = '#f9c13a';
+      clearEdited(); // nạp bộ mẫu chuẩn: cho phép ghi đè dữ liệu cũ
 
       const canvas = createDark43SampleCanvas();
       const img = new Image();
@@ -1160,6 +1168,7 @@ document.addEventListener('DOMContentLoaded', () => {
       state.scale = 100;
       state.margin = 4;
       state.barColor = '#f9c13a';
+      clearEdited(); // nạp bộ mẫu chuẩn: cho phép ghi đè dữ liệu cũ
 
       const canvas = createDark34SampleCanvas();
       const img = new Image();
@@ -1266,7 +1275,7 @@ document.addEventListener('DOMContentLoaded', () => {
     state.address1 = 'Sunrise B, KĐT The Manor Central Park,';
     state.address2 = 'Định Công, Hà Nội';
     state.logoTitle = 'Timemark';
-        state.logoSubtitle = '100% Chân thực';
+    state.logoSubtitle = '100% Chân thực';
     state.vertCode = '149HXNC36GBETD';
     state.scale = 100;
     state.margin = 4;
@@ -1274,6 +1283,7 @@ document.addEventListener('DOMContentLoaded', () => {
     state.barColor = '#f9c13a';
     state.shadow = 85;
     state.opacity = 100;
+    clearEdited(); // xoá đánh dấu -> preset của mẫu được phép điền lại
     syncInputsFromState();
     updateCanvas();
   });
@@ -1299,6 +1309,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const addr = await GeoService.reverseGeocode(pos.latitude, pos.longitude);
       state.address1 = addr.line1;
       state.address2 = GeoService.formatCoordsString(pos.latitude, pos.longitude);
+      markEdited('address1', 'address2');
       syncInputsFromState();
     } catch (e) {
       alert('Không thể lấy GPS camera: ' + e.message);
@@ -1376,6 +1387,9 @@ document.addEventListener('DOMContentLoaded', () => {
     state.customLocation = r.line1 || r.displayName;
     state.customGps = formatSignedCoords(r.latitude, r.longitude);
     state.secAddr = r.line1 || r.displayName;
+    // Đánh dấu là dữ liệu của người dùng -> đổi mẫu watermark KHÔNG làm mất
+    markEdited('address1', 'address2', 'gpsLine3', 'gpsLine4', 'gpsLine5',
+               'customLocation', 'customGps', 'secAddr');
     syncInputsFromState();
     updateCanvas();
     if (geoResults) geoResults.classList.add('hidden');

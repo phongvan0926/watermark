@@ -233,6 +233,65 @@ async function main() {
   await page.unroute('**/photon.komoot.io/**');
   await page.unroute('**/photon.komoot.io/api/**');
 
+
+  // === HỒI QUY: đổi mẫu watermark KHÔNG được làm mất địa chỉ/toạ độ đã lấy ===
+  // Tái hiện đúng lỗi người dùng báo: tìm GPS xong -> đổi mẫu -> địa chỉ về mặc định.
+  await page.route('**/nominatim.openstreetmap.org/search**', route => {
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_NOMINATIM) });
+  });
+  await page.evaluate(() => document.querySelector('.template-card[data-template="timemark-standard"]').click());
+  await page.waitForTimeout(150);
+  await page.fill('#input-geo-search', '167 Nguyễn Ngọc Vũ, Cầu Giấy, Hà Nội');
+  await page.press('#input-geo-search', 'Enter');
+  await page.waitForSelector('.geo-result-item', { timeout: 8000 });
+  await page.click('.geo-result-item');
+  await page.waitForTimeout(250);
+
+  const beforeAddr = await page.inputValue('#input-addr-1');
+  const beforeGps = await page.inputValue('#input-custom-gps');
+  const beforeCity = await page.inputValue('#input-gps-line3');
+  check('lấy được địa chỉ trước khi đổi mẫu', beforeAddr.includes('Nguyễn Ngọc Vũ'), beforeAddr);
+
+  // Đổi qua lần lượt nhiều mẫu khác nhau
+  const switchTo = ['timemark-attendance', 'timemark-security', 'timemark-custom', 'timemark-gps', 'gps-multiline', 'timemark-standard'];
+  const lost = [];
+  for (const tpl of switchTo) {
+    await page.evaluate((t) => {
+      const c = document.querySelector(`.template-card[data-template="${t}"]`);
+      c.scrollIntoView({ block: 'center' }); c.click();
+    }, tpl);
+    await page.waitForTimeout(140);
+    const a = await page.inputValue('#input-addr-1');
+    if (a !== beforeAddr) lost.push(`${tpl}: "${a}"`);
+  }
+  check('đổi qua 6 mẫu -> địa chỉ KHÔNG bị mất', lost.length === 0, lost.join(' | '));
+
+  const afterGps = await page.inputValue('#input-custom-gps');
+  const afterCity = await page.inputValue('#input-gps-line3');
+  check('toạ độ GPS giữ nguyên sau khi đổi mẫu', afterGps === beforeGps, `${beforeGps} -> ${afterGps}`);
+  check('tỉnh/thành giữ nguyên sau khi đổi mẫu', afterCity === beforeCity, `${beforeCity} -> ${afterCity}`);
+
+  // Chỉ báo "đang giữ N nội dung" phải hiện
+  const noteVisible = await page.$eval('#user-data-note', el => !el.classList.contains('hidden'));
+  check('hiện chỉ báo đang giữ dữ liệu người dùng', noteVisible);
+
+  // Trường người dùng CHƯA đụng tới vẫn được preset điền bình thường
+  await page.evaluate(() => document.querySelector('.template-card[data-template="timemark-service"]').click());
+  await page.waitForTimeout(160);
+  const servTitle = await page.inputValue('#input-serv-title');
+  check('trường chưa nhập vẫn nhận nội dung mẫu', servTitle.length > 0, servTitle);
+
+  // Nút "Khôi phục mẫu ban đầu" phải xoá đánh dấu -> preset điền lại được
+  await page.evaluate(() => document.getElementById('btn-reset-text').click());
+  await page.waitForTimeout(200);
+  const noteAfterReset = await page.$eval('#user-data-note', el => el.classList.contains('hidden'));
+  check('Khôi phục -> ẩn chỉ báo (xoá đánh dấu)', noteAfterReset);
+  await page.evaluate(() => document.querySelector('.template-card[data-template="timemark-attendance"]').click());
+  await page.waitForTimeout(160);
+  const addrAfterReset = await page.inputValue('#input-addr-1');
+  check('sau Khôi phục, đổi mẫu lại nhận nội dung mẫu', addrAfterReset.includes('Tao Dan Park'), addrAfterReset);
+  await page.unroute('**/nominatim.openstreetmap.org/search**');
+
   // Camera modal với thiết bị giả lập: nút chụp phải nằm trong màn hình
   await page.evaluate(() => document.getElementById('btn-open-camera').click());
   await page.waitForTimeout(1500);

@@ -1066,6 +1066,17 @@ body {
   color: var(--text-primary);
 }
 
+/* Chỉ báo dữ liệu người dùng đang được bảo vệ khỏi preset của mẫu */
+.user-data-note {
+  font-size: 0.72rem;
+  color: #86efac;
+  background: rgba(22, 163, 74, 0.12);
+  border: 1px solid rgba(22, 163, 74, 0.35);
+  border-radius: var(--radius-md);
+  padding: 6px 10px;
+  line-height: 1.4;
+}
+
 /* Form Elements */
 .form-group {
   display: flex;
