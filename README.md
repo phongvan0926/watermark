@@ -3,7 +3,7 @@
 [![Dùng ngay trên web](https://img.shields.io/badge/%F0%9F%9A%80_D%C3%B9ng_ngay-GitHub_Pages-f9c13a?style=for-the-badge)](https://phongvan0926.github.io/watermark/)
 [![Tests](https://img.shields.io/badge/Tests-86%2F86_PASS-2ea44f?style=for-the-badge)](#-kiểm-thử)
 [![Zero Dependency](https://img.shields.io/badge/Zero--Dependency-Vanilla_JS-blue?style=for-the-badge)](#-kiến-trúc)
-[![Version](https://img.shields.io/badge/version-1.6.3-f59e0b?style=for-the-badge)](AGENTS.md#6-nhật-ký-thay-đổi-changelog)
+[![Version](https://img.shields.io/badge/version-1.7.0-f59e0b?style=for-the-badge)](AGENTS.md#7-nhật-ký-thay-đổi-changelog)
 
 Công cụ web đóng dấu **ngày giờ + địa chỉ + toạ độ GPS + mã xác thực** lên ảnh, tái tạo chuẩn xác phong cách app **Timemark: Photo Proof for Work** và GPS Map Camera — chạy 100% trên trình duyệt, không cần cài đặt, ảnh không bao giờ rời khỏi máy bạn.
 
@@ -26,6 +26,14 @@ Công cụ web đóng dấu **ngày giờ + địa chỉ + toạ độ GPS + mã
 
 ![Tải hàng loạt — mỗi ảnh một mã & giờ riêng](assets/screenshot-batch.png)
 
+## 🦙 Công Cụ Bổ Trợ: Xoá Watermark & Vật Thể Bằng AI (`lama-cleaner/`)
+
+Dự án tích hợp sẵn ứng dụng AI **LaMa Inpainting Studio** nằm trong thư mục con `lama-cleaner/` chuyên dùng để xoá watermark ngày giờ, toạ độ hoặc chi tiết thừa và tái tạo nền ảnh nguyên bản bằng mạng học sâu **Big-LaMa (Fast Fourier Convolutions)**:
+- **Khởi chạy 1-click:** Nhấp đúp vào `run_lama_ui.bat` ở thư mục gốc (hoặc `lama-cleaner/run.bat`). Trình duyệt sẽ mở tại `http://localhost:7860`.
+- **Nút chọn nhanh (1-Click Presets):** Tự động phủ kín vùng watermark ở góc dưới trái (Timemark, GPS Pro), góc dưới phải, cả viền đáy, hoặc góc trên.
+- **Lossless Composite:** Vùng ảnh không có watermark được bảo toàn 100% độ sắc nét nguyên bản, không bị nén mờ hay biến dạng.
+- **Thanh trượt Before / After & Nút xem ảnh gốc:** Kéo so sánh mượt mà từng pixel giữa ảnh gốc và ảnh sau khi xoá watermark.
+
 ## 🚀 Sử dụng
 
 **Cách 1 — Trên web (khuyến nghị):** mở https://phongvan0926.github.io/watermark/
@@ -40,21 +48,25 @@ cd watermark
 
 ## 🏗 Kiến trúc
 
-Zero-Dependency thuần HTML5 / CSS / JavaScript ES6+ — không framework, không bundler:
+Zero-Dependency thuần HTML5 / CSS / JavaScript ES6+ cho ứng dụng chính, kết hợp thư mục con AI độc lập:
 
 ```
-├── index.html                  # Giao diện chính
-├── css/style.css               # Dark glassmorphism UI
+├── index.html                  # Giao diện chính Timemark
+├── run_lama_ui.bat             # Launcher mở LaMa Inpainting Studio
+├── css/style.css               # Dark glassmorphism UI Timemark
 ├── js/
 │   ├── watermark-engine.js     # Lõi vẽ Canvas 2D — 12 mẫu, hằng số layout đo từ ảnh thật
 │   ├── exif-parser.js          # Đọc EXIF nhị phân (ngày chụp, GPS) không thư viện
 │   ├── geocoding.js            # Định vị, tra địa chỉ xuôi/ngược 2 nguồn (Nominatim+Photon), sinh mã, cộng giờ
 │   ├── camera.js               # Camera trực tiếp + overlay watermark realtime
 │   └── app.js                  # State controller, đồng bộ 2 chiều UI ⟷ state, biến thể batch
-├── tests/
-│   ├── ui-test.js              # 67 kiểm thử UI (reachability, geocode + fallback, giữ dữ liệu, camera)
-│   ├── batch-test.js           # 11 kiểm thử loạt ảnh (mã riêng + giờ cộng dồn)
-│   └── vert-code-test.js       #  8 kiểm thử định dạng mã xác thực (20.000 mã)
+├── lama-cleaner/               # Ứng dụng AI xoá watermark & vật thể (Big-LaMa Inpainting)
+│   ├── webui/                  # Giao diện Canvas Studio
+│   ├── engine.py               # Lõi AI inference PyTorch
+│   ├── server.py               # Server HTTP đa luồng (cổng 7860)
+│   ├── run.bat                 # Chạy 1-click nội bộ
+│   └── tests/                  # Test tự động
+├── tests/                      # Test Playwright cho app Timemark chính
 ├── .github/workflows/          # Tự động deploy GitHub Pages mỗi lần push
 └── AGENTS.md                   # Tài liệu kỹ thuật đầy đủ + changelog cho AI agents
 ```

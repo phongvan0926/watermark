@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LaMa Inpainting Studio — Xoá Watermark & Vật Thể</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Top Navigation -->
+        <header class="app-header">
+            <div class="header-brand">
+                <div class="brand-logo">🦙</div>
+                <div class="brand-info">
+                    <h1>LaMa Inpainting Studio</h1>
+                    <span class="brand-sub">advimman/lama • Resolution-robust Big-LaMa</span>
+                </div>
+            </div>
+
+            <div class="header-center">
+                <div class="status-chip" id="server-status">
+                    <span class="status-dot"></span>
+                    <span id="status-text">Đang kết nối Server...</span>
+                </div>
+            </div>
+
+            <div class="header-actions">
+                <button class="btn btn-secondary" id="btn-load-sample" title="Nạp ảnh mẫu có watermark đóng dấu GPS">
+                    <i data-lucide="sparkles"></i> <span>Ảnh Mẫu Thử</span>
+                </button>
+                <label class="btn btn-primary btn-file">
+                    <i data-lucide="upload"></i> <span>Tải Ảnh Lên</span>
+                    <input type="file" id="file-input" accept="image/*" style="display:none">
+                </label>
+            </div>
+        </header>
+
+        <!-- Main Workspace -->
+        <main class="app-body">
+            <!-- Left Sidebar Controls -->
+            <aside class="sidebar-panel">
+                <!-- Tool Selection -->
+                <div class="panel-section">
+                    <div class="section-title">
+                        <i data-lucide="brush"></i> <span>Công Cụ Chọn Vùng</span>
+                    </div>
+                    <div class="tool-grid">
+                        <button class="tool-btn active" id="tool-brush" title="Cọ vẽ tự do vùng cần xoá">
+                            <i data-lucide="paintbrush"></i>
+                            <span>Cọ Vẽ</span>
+                        </button>
+                        <button class="tool-btn" id="tool-eraser" title="Tẩy bớt vùng mask vẽ thừa">
+                            <i data-lucide="eraser"></i>
+                            <span>Tẩy Mask</span>
+                        </button>
+                        <button class="tool-btn" id="tool-rect" title="Kéo hộp vuông bao quanh watermark">
+                            <i data-lucide="square"></i>
+                            <span>Hộp Vuông</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Quick Watermark Presets (1-Click Selection) -->
+                <div class="panel-section">
+                    <div class="section-title">
+                        <i data-lucide="target"></i> <span>Vùng Watermark Mẫu (1-Click)</span>
+                    </div>
+                    <p class="input-hint">Tự động phủ kín vùng watermark theo các góc ảnh phổ biến:</p>
+                    <div class="preset-grid">
+                        <button class="btn-preset" data-preset="bottom-left">
+                            <i data-lucide="corner-down-left"></i> Góc Dưới Trái
+                        </button>
+                        <button class="btn-preset" data-preset="bottom-right">
+                            <i data-lucide="corner-down-right"></i> Góc Dưới Phải
+                        </button>
+                        <button class="btn-preset" data-preset="bottom-bar">
+                            <i data-lucide="minus"></i> Cả Dòng Đáy
+                        </button>
+                        <button class="btn-preset" data-preset="top-right">
+                            <i data-lucide="corner-up-right"></i> Góc Trên Phải
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Brush Size Slider & Quick Presets -->
+                <div class="panel-section">
+                    <div class="section-header-flex">
+                        <label for="brush-size">Kích Thước Cọ</label>
+                        <span class="val-badge" id="brush-size-val">40px</span>
+                    </div>
+                    <div class="range-wrapper">
+                        <input type="range" id="brush-size" min="4" max="250" value="40">
+                        <div class="brush-preview-dot" id="brush-dot"></div>
+                    </div>
+                    <div class="size-chips">
+                        <button class="chip-btn" data-size="15">15px</button>
+                        <button class="chip-btn" data-size="40">40px</button>
+                        <button class="chip-btn" data-size="80">80px</button>
+                        <button class="chip-btn" data-size="150">150px</button>
+                    </div>
+                </div>
+
+                <!-- Mask Actions -->
+                <div class="panel-section">
+                    <div class="section-title">
+                        <i data-lucide="layers"></i> <span>Thao Tác Mask</span>
+                    </div>
+                    <div class="btn-group-2">
+                        <button class="btn btn-sm btn-outline" id="btn-undo" title="Hoàn tác nét vẽ (Ctrl+Z)">
+                            <i data-lucide="undo-2"></i> <span>Hoàn Tác</span>
+                        </button>
+                        <button class="btn btn-sm btn-outline" id="btn-redo" title="Làm lại (Ctrl+Y)">
+                            <i data-lucide="redo-2"></i> <span>Làm Lại</span>
+                        </button>
+                    </div>
+                    <div class="btn-group-2 mt-2">
+                        <button class="btn btn-sm btn-outline btn-danger-hover" id="btn-clear-mask" title="Xoá sạch toàn bộ mask">
+                            <i data-lucide="trash-2"></i> <span>Xoá Mask</span>
+                        </button>
+                        <button class="btn btn-sm btn-outline" id="btn-invert-mask" title="Đảo ngược vùng chọn">
+                            <i data-lucide="flip-horizontal"></i> <span>Đảo Mask</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Advanced Options: Dilation -->
+                <div class="panel-section">
+                    <div class="section-header-flex">
+                        <label for="dilate-radius">Mở Rộng Viền (Dilation)</label>
+                        <span class="val-badge" id="dilate-val">4px</span>
+                    </div>
+                    <p class="input-hint">Tự động nới rộng vùng mask để xoá triệt để bóng mờ & viền chữ.</p>
+                    <input type="range" id="dilate-radius" min="0" max="25" value="4">
+                </div>
+
+                <!-- Primary Inpaint Button -->
+                <div class="panel-section sticky-action">
+                    <button class="btn btn-inpaint" id="btn-inpaint" disabled>
+                        <i data-lucide="wand-2"></i>
+                        <span>XOÁ VÙNG CHỌN (ENTER)</span>
+                    </button>
+                    <div class="perf-tag" id="perf-tag"></div>
+                </div>
+
+                <!-- Quick Help / Hotkeys -->
+                <div class="panel-section hotkeys-card">
+                    <div class="hotkey-title"><i data-lucide="keyboard"></i> Phím Tắt Tiện Lợi</div>
+                    <div class="hotkey-row"><span>Giảm / Tăng cọ</span> <code>[</code> / <code>]</code></div>
+                    <div class="hotkey-row"><span>Hoàn tác</span> <code>Ctrl + Z</code></div>
+                    <div class="hotkey-row"><span>Dán ảnh</span> <code>Ctrl + V</code></div>
+                    <div class="hotkey-row"><span>Chạy Xoá</span> <code>Enter</code></div>
+                </div>
+            </aside>
+
+            <!-- Center Canvas Viewport -->
+            <section class="canvas-viewport" id="viewport">
+                <!-- Dropzone Placeholder (When no image loaded) -->
+                <div class="dropzone-container" id="dropzone">
+                    <div class="dropzone-card">
+                        <div class="dropzone-icon">
+                            <i data-lucide="image-plus"></i>
+                        </div>
+                        <h3>Kéo & Thả Ảnh Vào Đây</h3>
+                        <p>Hoặc dán ảnh từ Clipboard (<strong>Ctrl + V</strong>), hoặc bấm nút bên dưới</p>
+                        <div class="dropzone-buttons">
+                            <label class="btn btn-primary">
+                                <i data-lucide="folder-open"></i> <span>Chọn Ảnh Từ Máy</span>
+                                <input type="file" id="dropzone-file-input" accept="image/*" style="display:none">
+                            </label>
+                            <button class="btn btn-secondary" id="btn-dropzone-sample">
+                                <i data-lucide="sparkles"></i> <span>Thử Ảnh Mẫu Ngay</span>
+                            </button>
+                        </div>
+                        <div class="supported-formats">Hỗ trợ PNG, JPG, JPEG, WEBP • Độ phân giải cao không giới hạn</div>
+                    </div>
+                </div>
+
+                <!-- Canvas Workspace Layer -->
+                <div class="editor-workspace" id="editor-workspace" style="display: none;">
+                    <!-- View Toolbar -->
+                    <div class="view-toolbar">
+                        <div class="view-mode-tabs" id="view-mode-tabs">
+                            <button class="tab-btn active" data-mode="editor"><i data-lucide="edit-3"></i> Vẽ Mask</button>
+                            <button class="tab-btn" data-mode="slider" id="tab-slider" disabled><i data-lucide="columns"></i> So Sánh Before / After</button>
+                            <button class="tab-btn" data-mode="result" id="tab-result" disabled><i data-lucide="check-circle-2"></i> Kết Quả</button>
+                        </div>
+
+                        <div class="view-center-tools">
+                            <button class="btn btn-sm btn-outline" id="btn-peek-orig" style="display: none;" title="Giữ chuột để xem ảnh gốc">
+                                <i data-lucide="eye"></i> <span>Giữ để xem ảnh gốc</span>
+                            </button>
+                        </div>
+
+                        <div class="zoom-controls">
+                            <button class="icon-btn" id="btn-zoom-out" title="Thu nhỏ"><i data-lucide="minus"></i></button>
+                            <span class="zoom-text" id="zoom-val">100%</span>
+                            <button class="icon-btn" id="btn-zoom-in" title="Phóng to"><i data-lucide="plus"></i></button>
+                            <button class="icon-btn" id="btn-zoom-fit" title="Vừa màn hình"><i data-lucide="maximize-2"></i></button>
+                        </div>
+                    </div>
+
+                    <!-- Canvas Stage -->
+                    <div class="canvas-scroll-stage" id="canvas-stage">
+                        <div class="canvas-wrapper" id="canvas-wrapper">
+                            <canvas id="image-canvas"></canvas>
+                            <canvas id="mask-canvas"></canvas>
+                            <div class="cursor-brush" id="cursor-brush"></div>
+
+                            <!-- Interactive Split Comparison Slider (Overlay) -->
+                            <div class="comparison-container" id="comparison-container" style="display: none;">
+                                <img id="comp-before-img" class="comp-img comp-orig" alt="Before">
+                                <div class="comp-after-wrapper" id="comp-after-wrapper">
+                                    <img id="comp-after-img" class="comp-img comp-result" alt="After">
+                                </div>
+                                <div class="comp-divider" id="comp-divider">
+                                    <div class="comp-handle">
+                                        <i data-lucide="move-horizontal"></i>
+                                    </div>
+                                </div>
+                                <div class="comp-label label-before">Ảnh Gốc</div>
+                                <div class="comp-label label-after">Đã Xoá Watermark</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Bottom Action Bar for Results -->
+                    <div class="result-action-bar" id="result-bar" style="display: none;">
+                        <div class="result-left">
+                            <span class="badge-success"><i data-lucide="check"></i> Đã xoá watermark thành công</span>
+                            <span class="result-time" id="result-time-text">0.45s</span>
+                        </div>
+                        <div class="result-right">
+                            <button class="btn btn-secondary" id="btn-use-as-input" title="Dùng kết quả này để tiếp tục xoá vùng khác">
+                                <i data-lucide="refresh-cw"></i> <span>Tiếp Tục Chỉnh Sửa</span>
+                            </button>
+                            <button class="btn btn-success" id="btn-download" title="Tải ảnh chất lượng cao về máy">
+                                <i data-lucide="download"></i> <span>Tải Ảnh Về Máy</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Loading Processing Overlay -->
+                <div class="loading-overlay" id="loading-overlay" style="display: none;">
+                    <div class="spinner-lama">
+                        <div class="spinner-ring"></div>
+                        <div class="spinner-lama-icon">🦙</div>
+                    </div>
+                    <div class="loading-title">Big-LaMa Đang Xoá Vùng Chọn...</div>
+                    <div class="loading-sub">Mạng nơ-ron Fourier Convolutions đang tái tạo nền ảnh</div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Notification Toast Container -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>

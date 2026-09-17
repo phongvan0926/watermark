@@ -1,2 +1,23 @@
 node_modules/
 tests/node_modules/
+
+# Python cache & virtual environments
+__pycache__/
+*/__pycache__/
+*.pyc
+.venv/
+env/
+
+# AI Model weights (>100MB cannot be pushed to GitHub)
+*.pt
+*.pth
+*.onnx
+*.bin
+*.safetensors
+models/
+lama-cleaner/models/*.pt
+lama-cleaner/models/*.onnx
+
+# Test outputs
+tests/output/
+lama-cleaner/tests/output/

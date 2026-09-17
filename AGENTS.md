@@ -6,10 +6,10 @@ Tài liệu này chứa toàn bộ kiến trúc, nguyên lý hoạt động, c�
 
 ## 1. Tổng Quan Dự Án (Project Overview)
 
-- **Tên dự án:** Timemark & GPS Watermark Pro
-- **Mục tiêu:** Tái tạo chuẩn xác **100% tuyệt đối** phong cách đóng dấu ngày giờ, toạ độ GPS, mã bảo mật chống giả mạo của ứng dụng Android nổi tiếng **Timemark: Photo Proof for Work** (Mã gói: `com.oceangalaxy.camera.new` của Ocean Galaxy Pte. Ltd) và các ứng dụng GPS Map Camera.
-- **Kiến trúc:** 100% Client-side Web Application (HTML5, Vanilla CSS, Vanilla JavaScript ES6+).
-- **Yêu cầu không phụ thuộc (Zero-Dependency):** Không cần cài đặt Node.js hay Build tool để chạy. Người dùng có thể nhấp đúp mở trực tiếp file `index.html` trên bất kỳ trình duyệt máy tính hoặc điện thoại nào.
+- **Tên dự án:** Timemark & GPS Watermark Pro + LaMa Inpainting Studio
+- **Kiến trúc tổng thể (Dual-Architecture):**
+  1. **Ứng Dụng Chính (Root — Đóng Dấu):** Tái tạo chuẩn xác **100% tuyệt đối** phong cách đóng dấu ngày giờ, toạ độ GPS, mã bảo mật chống giả mạo của ứng dụng Android nổi tiếng **Timemark: Photo Proof for Work** (Mã gói: `com.oceangalaxy.camera.new` của Ocean Galaxy Pte. Ltd) và các ứng dụng GPS Map Camera. Chạy 100% Client-side Web Application (HTML5, Vanilla CSS, Vanilla JavaScript ES6+), Zero-Dependency không cần Node.js để chạy.
+  2. **Ứng Dụng Bổ Trợ (`lama-cleaner/` — Xoá Dấu & Vật Thể):** Bộ công cụ AI xoá watermark và vật thể thừa, tái tạo nền ảnh nguyên bản bằng mạng nơ-ron học sâu **Big-LaMa (Resolution-robust Large Mask Inpainting with Fourier Convolutions)** từ repo `advimman/lama`. Có backend Python PyTorch/TorchScript và giao diện Web UI Canvas chuyên dụng.
 
 ---
 
@@ -17,17 +17,28 @@ Tài liệu này chứa toàn bộ kiến trúc, nguyên lý hoạt động, c�
 
 ```
 c:\Users\Admin\Desktop\Water Mark\
-├── index.html                  # Giao diện chính: Canvas xem trước, thanh tỷ lệ (4:3, 3:4...), 12 mẫu, khung Tìm GPS theo địa chỉ, thanh danh sách ảnh loạt, camera modal
+├── index.html                  # Giao diện chính Timemark: Canvas xem trước, thanh tỷ lệ, 12 mẫu, Tìm GPS, camera modal
+├── run_lama_ui.bat             # File thực thi 1-click mở nhanh LaMa Inpainting Studio từ thư mục gốc
 ├── css/
-│   └── style.css               # Toàn bộ giao diện Dark Glassmorphism, CSS Tokens, accordion, nav chip, batch strip, responsive
+│   └── style.css               # Giao diện Dark Glassmorphism Timemark, CSS Tokens, accordion, nav chip, batch strip
 ├── js/
-│   ├── exif-parser.js          # Bộ phân tích nhị phân JPEG EXIF (ngày chụp DateTimeOriginal, toạ độ GPS Lat/Lon), có validate chống ngày rác
-│   ├── geocoding.js            # Geolocation API, tra địa chỉ NGƯỢC + XUÔI với 2 nhà cung cấp dự phòng (Nominatim -> Photon), sinh mã xác thực, addMinutesToTime
-│   ├── watermark-engine.js     # Lõi vẽ Canvas 2D, co giãn tỷ lệ động, 12 hàm vẽ mẫu, preloadFonts, anchorBlock 4 góc, logo 2 tông màu, mã xoay -90°
+│   ├── exif-parser.js          # Bộ phân tích nhị phân JPEG EXIF (ngày chụp DateTimeOriginal, toạ độ GPS Lat/Lon), validate ngày
+│   ├── geocoding.js            # Geolocation API, tra địa chỉ NGƯỢC + XUÔI với 2 nhà cung cấp dự phòng (Nominatim -> Photon), sinh mã, cộng giờ
+│   ├── watermark-engine.js     # Lõi vẽ Canvas 2D, co giãn tỷ lệ động, 12 hàm vẽ mẫu, preloadFonts, anchorBlock 4 góc, logo 2 màu, mã xoay -90°
 │   ├── camera.js               # Camera trực tiếp (MediaDevices), lật camera, live overlay loop, chống race bằng token thế hệ
-│   └── app.js                  # State Controller, two-way binding, userEdited/applyPreset (giữ dữ liệu khi đổi mẫu), biến thể per-image, tải ZIP, tìm GPS
-├── tests/                      # Bộ test Playwright (package.json RIÊNG — app chính vẫn Zero-Dependency)
-│   ├── ui-test.js              # 67 kiểm thử: reachability, 12 mẫu × 4 vị trí, accordion, geocode + fallback, giữ dữ liệu khi đổi mẫu, camera
+│   └── app.js                  # State Controller Timemark, two-way binding, userEdited/applyPreset, biến thể per-image, tải ZIP, tìm GPS
+├── lama-cleaner/               # [MÔ-ĐUN AI XOÁ DẤU & VẬT THỂ — TÁI TẠO NỀN ẢNH BẰNG LAMA]
+│   ├── webui/                  # Giao diện Web UI Studio (index.html, style.css, app.js)
+│   ├── models/                 # Trọng số Big-LaMa (big-lama.pt ~205MB, tự động tải nếu thiếu, đưa vào .gitignore)
+│   ├── engine.py               # Lõi AI inpainting (padding reflect bội số 8, mask dilation, lossless alpha composite)
+│   ├── server.py               # Máy chủ HTTP đa luồng (API /api/inpaint, /api/status, /api/sample)
+│   ├── run.bat                 # Khởi động 1-click nội bộ của thư mục lama-cleaner
+│   ├── requirements.txt        # Danh sách thư viện Python cần thiết
+│   ├── tests/                  # Bộ kiểm thử tự động (self_test.py)
+│   ├── lama-repo/              # Mã nguồn upstream advimman/lama (đã loại bỏ .git để tránh conflict submodule)
+│   └── README.md               # Tài liệu hướng dẫn riêng cho LaMa Studio
+├── tests/                      # Bộ test Playwright cho app chính Timemark (package.json RIÊNG — app chính vẫn Zero-Dependency)
+│   ├── ui-test.js              # 67 kiểm thử: reachability, 12 mẫu × 4 vị trí, accordion, geocode + fallback, giữ dữ liệu, camera
 │   ├── batch-test.js           # 11 kiểm thử: mỗi ảnh mã duy nhất + giờ cộng dồn 0–2 phút
 │   └── vert-code-test.js       #  8 kiểm thử: định dạng mã xác thực trên 20.000 mẫu sinh ra
 ├── assets/                     # Ảnh chụp màn hình dùng trong README
@@ -135,9 +146,61 @@ Từ v1.4.0, mẫu `timemark-standard` dùng **hệ đơn vị scale thống nh�
    - **c. Push** lên `origin main` để local và GitHub luôn đồng bộ; GitHub Pages sẽ tự deploy sau ~1 phút.
    - Không chờ người dùng nhắc — đây là bước kết thúc mặc định của mọi tác vụ có thay đổi mã nguồn.
 
+## 6. Kiến Trúc & Quy Chuẩn LaMa Inpainting Studio (`lama-cleaner/`)
+
+Mô-đun `lama-cleaner/` là ứng dụng AI bổ trợ chuyên dùng để xoá watermark (ngày giờ, toạ độ GPS, logo) và vật thể thừa, tái tạo lại nền ảnh nguyên bản bằng mạng nơ-ron học sâu **Big-LaMa (Resolution-robust Large Mask Inpainting with Fourier Convolutions)** từ repo `advimman/lama`.
+
+### 6.1. Nguyên Lý Mô Hình & Xử Lý Tensor (`engine.py`)
+1. **Kiến trúc mạng:** Big-LaMa sử dụng các khối tích chập Fourier nhanh (Fast Fourier Convolutions - FFC) với trường tiếp nhận toàn cục (global receptive field), cho phép phục hồi cấu trúc định kỳ và chi tiết lớn ở độ phân giải cao vượt trội so với CNN thông thường.
+2. **Quy tắc Padding Bội Số 8:**
+   - Đầu vào của mạng yêu cầu chiều rộng và chiều cao phải chia hết cho 8.
+   - Hàm `_pad_img_to_modulo(img, mod=8)` thực hiện đệm biên phía dưới và bên phải theo chế độ phản xạ đối xứng (`mode='reflect'`) để tránh sinh viền giả ở mép ảnh. Sau khi inpainting, ảnh đầu ra được crop trả về đúng kích thước gốc `(orig_h, orig_w)`.
+3. **Quy tắc Bắt Mask Nhạy Cảm & Dilation Triệt Để:**
+   - Ngưỡng nhị phân hoá mask: `mask_binary = (mask_np > 10).astype(np.float32)`. Tuyệt đối không dùng ngưỡng cao `> 127` vì sẽ bỏ sót các nét cọ mờ và phần đổ bóng (drop shadow) mờ ở viền chữ watermark.
+   - Mở rộng viền (Dilation): Áp dụng `cv2.dilate` với kernel ellipse `cv2.MORPH_ELLIPSE` kích thước `(dilate_radius * 2 + 1)` (mặc định 4px) để ôm trùm hoàn toàn phần viền khử răng cưa (anti-aliasing) của watermark.
+4. **Quy chuẩn Ghép Ảnh Bảo Toàn Nền Gốc (Lossless Alpha Composite):**
+   - Mạng nơ-ron sinh ra toàn bộ bức ảnh, nhưng để bảo toàn **100% độ sắc nét nguyên bản tuyệt đối** của các vùng không bị xoá, `engine.py` thực hiện ghép ảnh:
+     $$\text{mask\_feather} = \text{GaussianBlur}(\text{mask\_binary}, (3, 3))$$
+     $$\text{final} = \text{orig\_img} \times (1.0 - \text{mask\_feather}) + \text{output} \times \text{mask\_feather}$$
+   - Nhờ đó, 90%+ diện tích ảnh không bị watermark tác động sẽ giữ nguyên bit-exact từng pixel, hoàn toàn không bị suy giảm chất lượng.
+
+### 6.2. Máy Chủ HTTP & Giao Tiếp API (`server.py`)
+- Sử dụng `ThreadingHTTPServer` đa luồng, độc lập, không yêu cầu framework nặng.
+- **An toàn mã hoá console Windows:** Luôn cấu hình `sys.stdout.reconfigure(encoding='utf-8', errors='replace')` để tránh lỗi `UnicodeEncodeError` khi in emoji hoặc chuỗi Unicode trên Windows Console (`cp1252`).
+- **Danh sách Endpoint:**
+  - `GET /`: Phục vụ giao diện Web UI Studio từ thư mục `webui/`.
+  - `GET /api/status`: Trả về trạng thái mô hình (`ready`), tên mô hình (`Big-LaMa`), và thiết bị thực thi (`cpu` hoặc `cuda`).
+  - `GET /api/sample`: Trả về ảnh mẫu JPEG chất lượng cao có sẵn watermark để người dùng thử nghiệm 1-click.
+  - `POST /api/inpaint`: Nhận JSON payload `{ image: "<b64>", mask: "<b64>", dilate: 4 }`, thực thi inpainting và trả về `{ success: true, result: "<b64>", elapsed_sec: ... }`.
+
+### 6.3. Giao Diện Canvas Web UI (`webui/`)
+- Thiết kế Dark Glassmorphism đồng bộ với ứng dụng chính.
+- **Tính toán toạ độ con trỏ cọ vẽ:** Tỷ lệ `scaleX = canvas.width / rect.width`, `scaleY = canvas.height / rect.height`. Vòng tròn preview cọ vẽ (`cursorBrush`) nằm ngay trong `canvasWrapper` với toạ độ pixel thực, tự động co giãn chính xác 100% ở mọi mức zoom.
+- **1-Click Watermark Presets:** Cung cấp 4 nút chọn nhanh các vùng watermark thường gặp:
+  - *Góc Dưới Trái:* bao phủ $0 \to 58\%$ chiều rộng, $65\% \to 100\%$ chiều cao (vị trí kinh điển của Timemark, Shot on, GPS Pro).
+  - *Góc Dưới Phải:* bao phủ $52\% \to 100\%$ chiều rộng, $70\% \to 100\%$ chiều cao (dấu ngày giờ, logo hãng).
+  - *Cả Dòng Đáy:* bao phủ $0 \to 100\%$ chiều rộng, $72\% \to 100\%$ chiều cao.
+  - *Góc Trên Phải:* bao phủ $58\% \to 100\%$ chiều rộng, $0 \to 25\%$ chiều cao.
+- **So sánh Before / After (Split Slider):** Căn chỉnh pixel tuyệt đối giữa ảnh trước và sau, không bị lệch hoặc méo hình khi kéo thanh trượt. Nút `[👁️ Giữ để xem ảnh gốc]` cho phép bấm giữ để so sánh tức thì.
+
+### 6.4. Quy Tắc An Toàn Git Cho Trọng Số AI (Model Weights Git Safety)
+- File trọng số `big-lama.pt` nặng ~205MB. **GitHub có giới hạn cứng 100MB cho mỗi file** — nếu commit file này vào Git sẽ bị GitHub từ chối push (`remote: error: GH001: Large files detected`).
+- **Quy tắc bắt buộc:**
+  1. Phải luôn khai báo `*.pt`, `*.onnx`, `models/`, `lama-cleaner/models/*.pt` trong `.gitignore`.
+  2. `engine.py` đã tích hợp sẵn phương thức `_ensure_model_exists()`, tự động tải mô hình từ release GitHub uy tín nếu trên máy chưa có. Người dùng hoặc AI clone repo về máy mới chỉ cần chạy `run.bat` là hệ thống sẽ tự tải trọng số về chạy mà không cần lưu binary vào kho mã nguồn.
+
+### 6.5. Hướng Dẫn Vận Hành & Kiểm Thử Cho AI Agents
+- Khởi động server từ thư mục con: `cd lama-cleaner && python server.py`.
+- Khởi động nhanh từ thư mục gốc: chạy file `run_lama_ui.bat`.
+- Chạy kiểm thử tự động toàn diện:
+  ```bash
+  python lama-cleaner/tests/self_test.py
+  ```
+  Script sẽ tự động kiểm tra cả 2 tầng: (1) Inference trực tiếp từ Python Engine, (2) Inference gián tiếp qua HTTP Server API.
+
 ---
 
-## 6. Nhật Ký Thay Đổi (Changelog)
+## 7. Nhật Ký Thay Đổi (Changelog)
 
 - **v1.0.0 (Ban đầu):**
   - Xây dựng kiến trúc nền tảng Web App, Canvas Watermark Engine, bộ đọc JPEG EXIF nhị phân, bộ giải mã toạ độ Việt Nam (Nominatim), Camera trực tiếp.
@@ -203,3 +266,13 @@ Từ v1.4.0, mẫu `timemark-standard` dùng **hệ đơn vị scale thống nh�
   - **Đường thoát rõ ràng:** nút "Khôi phục mẫu ban đầu" và 2 nút "Mẫu 4:3/3:4" gọi `clearEdited()` để xoá đánh dấu, cho phép preset điền lại từ đầu.
   - **Chỉ báo trực quan:** dòng xanh `🔒 Đang giữ N nội dung bạn đã nhập (không bị mất khi đổi mẫu)` hiện ở đầu khối "Chỉnh Sửa Nội Dung", tự ẩn khi không còn dữ liệu người dùng.
   - **8 test hồi quy mới trong `ui-test.js`** (59 → 67): lấy địa chỉ qua Tìm GPS rồi **đổi qua 6 mẫu liên tiếp** → địa chỉ/toạ độ/tỉnh-thành phải giữ nguyên; trường chưa nhập vẫn nhận preset; nút Khôi phục xoá đánh dấu và preset điền lại được. Tổng bộ test: **86/86 PASS**.
+- **v1.7.0 (Đóng Gói LaMa Inpainting Studio Vào Sub-App Độc Lập + Tối Ưu Mask AI):**
+  - **Đóng gói toàn bộ mô-đun AI xoá watermark vào `lama-cleaner/`**: Giữ sạch sẽ thư mục gốc để ứng dụng chính `Timemark GPS Pro` duy trì 100% tính chất Zero-Dependency. Thư mục con gồm đầy đủ `webui/`, `engine.py`, `server.py`, `models/`, `requirements.txt`, `tests/`, `run.bat` và `README.md`. File `run_lama_ui.bat` tại thư mục gốc đóng vai trò launcher chuyển tiếp 1-click.
+  - **Bảo vệ kho Git khỏi file trọng số lớn 205MB**: Cập nhật `.gitignore` chặn `*.pt`, `*.onnx`, `models/`, `lama-cleaner/models/`. Tích hợp logic `_ensure_model_exists()` trong `engine.py` tự động tải mô hình `big-lama.pt` từ release uy tín nếu chưa tồn tại, đảm bảo clone về bất kỳ máy nào cũng chạy được ngay.
+  - **Khắc phục triệt để các vấn đề xoá watermark chưa thành công**:
+    1. *Ngưỡng mask nhạy cảm:* Đổi ngưỡng nhị phân sang `mask > 10` (thay vì `> 127`), kết hợp mở rộng viền tự động (Dilation ellipse mặc định 4px) và làm mềm Gaussian feathering, xoá sạch hoàn toàn cả bóng đổ (drop shadow) và viền khử răng cưa của watermark.
+    2. *Ghép ảnh bảo toàn độ nét (Lossless Alpha Composite):* `orig * (1 - mask) + inpaint * mask` giúp 100% diện tích ảnh gốc ngoài vùng chọn giữ nguyên bit-exact không bị giảm chất lượng.
+    3. *Căn chỉnh pixel tuyệt đối:* Khắc phục lệch toạ độ cọ vẽ khi phóng to/thu nhỏ (Zoom Transform Invariance), sửa lỗi co ép ảnh trên thanh trượt so sánh Before / After (Split Slider).
+    4. *4 nút chọn nhanh watermark (1-Click Presets):* Phủ kín tức thì các góc watermark phổ biến (Góc dưới trái, góc dưới phải, cả dòng đáy, góc trên phải).
+    5. *Nút giữ xem ảnh gốc `[👁️ Giữ để xem ảnh gốc]`*: Cho phép kiểm tra đối chiếu trực quan tức thì.
+  - **Kiểm thử tự động 2 tầng (`lama-cleaner/tests/self_test.py`)**: Kiểm tra thành công cả inference trực tiếp qua Engine và inference gián tiếp qua HTTP Server API. Cập nhật tài liệu chi tiết tại mục 6 trong `AGENTS.md`.
